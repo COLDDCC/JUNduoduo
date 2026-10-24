@@ -1,0 +1,17 @@
+{
+  "name": "junduoduo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "骏和屋（駿河屋）分店拼单工具：贴链接选分店、看进度、成团自动发邮件给代购",
+  "scripts": {
+    "dev": "wrangler dev",
+    "test": "node --test test/*.test.js",
+    "db:init": "wrangler d1 execute junduoduo --remote --file=schema.sql",
+    "db:init:local": "wrangler d1 execute junduoduo --local --file=schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

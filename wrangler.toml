@@ -1,0 +1,27 @@
+name = "junduoduo"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "junduoduo"
+# 第一次部署前运行 `npx wrangler d1 create junduoduo`，把输出的 database_id 填到这里
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+GROUP_NAME = "骏和屋拼单"
+PREFECTURE = "大阪府"
+BUYER_EMAIL = "lengche2222@gmail.com"
+# 发件地址：域名需要先在 Resend 后台验证，例如 "骏和屋拼单 <pin@你的域名>"
+MAIL_FROM = "onboarding@resend.dev"
+# 网站地址，邮件里的“在拼单页查看”链接用；留空则用访问地址
+SITE_URL = ""
+
+# 以下用 `npx wrangler secret put 名字` 设置，不要写进这个文件：
+#   ADMIN_KEY       团长后台口令
+#   RESEND_API_KEY  Resend 的 API Key
+#   PIN_SALT        PIN 加盐用的随机字符串
