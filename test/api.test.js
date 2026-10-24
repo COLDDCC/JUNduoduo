@@ -73,7 +73,7 @@ test('完整流程：加入、PIN 校验、撤销、成团发邮件', async () =
 
   r = await join('小鹿', '5678', 100);
   const itemId = r.data.items.find((i) => i.cn === '小鹿').id;
-  assert.equal(r.data.result.needItems, 2);
+  assert.equal(r.data.result.needYen, 9700); // 小鹿上限 100：400×4850÷100 = 19400，已拼 9700
 
   r = await call(`/api/items/${itemId}/remove`, 'POST', { pin: '0000' });
   assert.equal(r.status, 403, '错误 PIN 不能撤销');
