@@ -1,18 +1,18 @@
 :root {
   /* 主题色：换成骏和屋官网的颜色只需改这三行 */
-  --accent: #D33A1F;
-  --accent-dark: #A82B14;
-  --accent-soft: #FDECE8;
+  --accent: #1C2189;
+  --accent-dark: #13176A;
+  --accent-soft: #E8E9F6;
   --ok: #1F7A4D;
   --ok-soft: #E4F2EA;
-  --ink: #1F1A17;
-  --ink-2: #4A423D;
-  --quiet: #6B625C;
-  --ground: #F6F3EF;
+  --ink: #1A1C2B;
+  --ink-2: #444A5C;
+  --quiet: #5F6475;
+  --ground: #F3F4F8;
   --card: #FFFFFF;
-  --line: #F1EAE5;
-  --track: #F1E9E4;
-  --field: #DDD3CC;
+  --line: #ECEDF3;
+  --track: #E3E5F0;
+  --field: #D6D9E4;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--ground); color: var(--ink); font-family: 'Noto Sans SC', system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
@@ -53,17 +53,17 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .card-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tag { font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 6px; white-space: nowrap; background: var(--accent-soft); color: var(--accent-dark); }
 .tag.ok { background: var(--ok-soft); color: var(--ok); }
-.tag.plain { background: #F4EFEB; color: var(--ink-2); font-weight: 500; }
+.tag.plain { background: #EEF0F5; color: var(--ink-2); font-weight: 500; }
 .bar { height: 12px; background: var(--track); border-radius: 999px; overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
 .bar.sm { height: 8px; }
 .meta { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; }
-.hint { margin: 0; font-size: 13px; color: var(--ink-2); background: #FAF7F4; padding: 8px 10px; border-radius: 8px; line-height: 1.6; }
+.hint { margin: 0; font-size: 13px; color: var(--ink-2); background: #F5F6FA; padding: 8px 10px; border-radius: 8px; line-height: 1.6; }
 .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .avatars { display: flex; gap: 6px; flex-wrap: wrap; }
 .av { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
 .av.lg { width: 36px; height: 36px; font-size: 14px; }
-.av.empty { border: 1.5px dashed #C8BDB5; }
+.av.empty { border: 1.5px dashed #B9BDCC; }
 .btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 18px; border-radius: 999px; border: none; background: var(--accent); color: #fff; font-weight: 700; font-size: 14px; text-decoration: none; cursor: pointer; }
 .btn.block { width: 100%; height: 52px; font-size: 16px; }
 .btn.dark { background: var(--ink); }
@@ -77,7 +77,7 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 
 /* 选店 */
 .product { display: flex; gap: 12px; flex-direction: row; }
-.product .ph { width: 72px; height: 72px; border-radius: 10px; background: #EFE7E1; flex-shrink: 0; }
+.product .ph { width: 72px; height: 72px; border-radius: 10px; background: #E6E8F0; flex-shrink: 0; }
 .product .t { font-size: 15px; font-weight: 700; line-height: 1.4; }
 .opt { background: var(--card); border: 2px solid transparent; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
 .opt.sel { border-color: var(--accent); }
@@ -107,7 +107,7 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .li .end { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .li .end b { font-size: 15px; }
 .good { font-size: 12px; font-weight: 700; color: var(--ok); }
-.bad { font-size: 12px; font-weight: 700; color: var(--accent-dark); }
+.bad { font-size: 12px; font-weight: 700; color: #B4421A; }
 .mini { height: 32px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--field); background: #fff; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .total { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 0 6px; border-top: 1.5px solid var(--ink); }
 .total b { font-size: 20px; font-weight: 900; }
@@ -117,7 +117,7 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .stats b { font-size: 17px; font-weight: 900; }
 
 /* 弹层 */
-.sheet-wrap { position: fixed; inset: 0; background: rgba(31,26,23,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
+.sheet-wrap { position: fixed; inset: 0; background: rgba(26,28,43,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 10; }
 .sheet-wrap[hidden] { display: none; }
 .sheet { background: #fff; width: 100%; max-width: 520px; border-radius: 18px 18px 0 0; padding: 20px 16px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
 .sheet h2 { margin: 0; font-size: 17px; }
@@ -147,12 +147,12 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .search { display: flex; align-items: center; gap: 8px; background: #fff; color: var(--quiet); border-radius: 999px; padding: 0 4px 0 14px; height: 44px; }
 .search input { flex: 1; min-width: 0; border: none; outline: none; height: 100%; background: transparent; color: var(--ink); }
 .search button { height: 36px; padding: 0 16px; border: none; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
-.thumb { width: 44px; height: 44px; border-radius: 8px; background: #EFE7E1; flex-shrink: 0; overflow: hidden; display: inline-block; }
+.thumb { width: 44px; height: 44px; border-radius: 8px; background: #E6E8F0; flex-shrink: 0; overflow: hidden; display: inline-block; }
 .thumb.lg { width: 72px; height: 72px; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shop { flex-direction: row; align-items: flex-start; gap: 12px; }
 .shop-img { position: relative; flex-shrink: 0; }
-.shop-img .more { position: absolute; right: 4px; bottom: 4px; background: rgba(31,26,23,.72); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 6px; }
+.shop-img .more { position: absolute; right: 4px; bottom: 4px; background: rgba(26,28,43,.72); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 6px; }
 .shop-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .shop-body h3 { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
