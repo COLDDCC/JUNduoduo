@@ -1,4 +1,5 @@
 :root {
+  /* 主题色：换成骏和屋官网的颜色只需改这三行 */
   --accent: #D33A1F;
   --accent-dark: #A82B14;
   --accent-soft: #FDECE8;
@@ -21,7 +22,7 @@ button, input { font-family: inherit; font-size: 15px; }
 .loading { padding: 40px 16px; text-align: center; color: var(--quiet); }
 
 /* 顶部 */
-.hero { background: var(--accent); color: #fff; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 12px; }
+.hero { background: var(--accent); color: #fff; padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
 .hero.ok { background: var(--ok); }
 .hero-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .brand { font-size: 20px; font-weight: 900; }
@@ -41,11 +42,12 @@ button, input { font-family: inherit; font-size: 15px; }
 .hero-meta { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; }
 
 /* 主体 */
-main { padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-top: -12px; }
+main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .sec-title { display: flex; justify-content: space-between; align-items: baseline; }
 .sec-title h2 { margin: 0; font-size: 17px; }
 .sec-title span, .muted { font-size: 12px; color: var(--quiet); }
-.card { background: var(--card); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 1px 2px rgba(31,26,23,.06); }
+.card { background: var(--card); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.card.link { text-decoration: none; color: var(--ink); }
 .card h3 { margin: 0; font-size: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .card-head > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -128,3 +130,11 @@ main { padding: 16px; display: flex; flex-direction: column; gap: 12px; margin-t
 .admin-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .admin-row input { height: 40px; border: 1px solid var(--field); border-radius: 8px; padding: 0 8px; width: 110px; }
 .admin-row input.wide { flex: 1; min-width: 180px; }
+
+/* 精简版补充 */
+.product-title { font-size: 15px; font-weight: 700; line-height: 1.4; padding: 4px 2px; }
+.opt { gap: 6px; padding: 12px 14px; }
+.preview.strong { color: var(--accent-dark); font-weight: 700; }
+.sub { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 0 0 10px; font-size: 13px; }
+.big b { font-size: 36px; }
+.list > .li:first-child { border-top: none; }

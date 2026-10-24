@@ -130,14 +130,14 @@ function renderHome(orders) {
   const $list = document.getElementById('list');
   if (!$list) return;
   $list.innerHTML = `
-    <div class="sec-title"><h2>正在拼 · ${open.length} 家店</h2><span>近 3 天成团 ${done.length}</span></div>
+    <div class="sec-title"><h2>正在拼 · ${open.length}</h2></div>
     ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">还没有人开团。贴一个链接，做第一个吧。</p>'}
     ${done.length ? `<div class="sec-title" style="margin-top:8px"><h2 style="font-size:15px;color:var(--quiet)">已成团</h2></div>` : ''}
     ${done
       .map(
         (o) => `<a class="done-link" href="#/order/${o.order.id}">
           <div style="display:flex;flex-direction:column;gap:3px"><b>${esc(o.order.shop_name)}</b>
-          <span class="muted">${o.result.members.length} 人 · ${o.result.count} 件 · ${o.result.fee ? `每件运费 ${jpy(o.result.perItem)}` : '包邮'} · ${o.order.mail_status === 'sent' ? '邮件已发代购' : '邮件未发出'}</span></div>
+          <span class="muted">${o.result.members.length} 人 · ${o.result.count} 件${o.order.mail_status === 'sent' ? '' : ' · 邮件未发出'}</span></div>
           <span class="tag ok">已成团</span></a>`,
       )
       .join('')}`;
@@ -146,16 +146,10 @@ function renderHome(orders) {
 function shopCard(d) {
   const r = d.result;
   const v = progressView(r, d.tiers);
-  return `<article class="card">
-    <div class="card-head"><div><h3>${esc(d.order.shop_name)}</h3><span class="muted">${describeTiers(d.tiers)}</span></div>
-      <span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
+  return `<a class="card link" href="#/order/${d.order.id}">
+    <div class="card-head"><h3>${esc(d.order.shop_name)}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
     <div class="bar"><i style="width:${v.pct}%"></i></div>
-    <div class="meta"><span>${v.left}</span><span class="muted">${v.right}</span></div>
-    ${v.hint ? `<p class="hint">${v.hint}</p>` : ''}
-    <div class="card-foot">
-      <div class="avatars">${r.members.map((m) => av(m.member)).join('')}${'<span class="av empty"></span>'.repeat(v.empty || 0)}</div>
-      <a class="btn" href="#/order/${d.order.id}">去拼单</a>
-    </div></article>`;
+    <div class="meta"><span>${v.left}</span><span class="muted">${v.right}</span></div></a>`;
 }
 
 // ---------- 贴链接 → 选分店 ----------
@@ -185,20 +179,17 @@ async function pick(url) {
 
   const render = () => {
     $main.innerHTML = `
-    <section class="card product"><div class="ph"></div>
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:0">
-        <div class="t">${esc(data.title || '骏和屋商品')}</div>
-        <div class="muted">共 ${L.length} 个出品在售 · 运费已按${esc(data.prefecture)}计算</div></div></section>
+    <div class="product-title">${esc(data.title || '骏和屋商品')}</div>
     ${L.map((l, i) => optCard(l, i === sel, me, i)).join('')}
     <form class="form" id="join">
       <div class="grid2">
         <div class="field"><label for="cn">你的 CN</label><input id="cn" maxlength="20" required value="${esc(me.cn)}"></div>
-        <div class="field"><label for="pin">PIN（QQ 号后 4 位）</label><input id="pin" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required style="letter-spacing:6px"></div>
+        <div class="field"><label for="pin">QQ 号后 4 位</label><input id="pin" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required style="letter-spacing:6px"></div>
       </div>
-      <div class="field"><label for="cap">我最多愿意分摊的运费（这一单合计，日元）</label><input id="cap" type="number" inputmode="numeric" min="0" step="10" value="${me.cap}"></div>
+      <div class="field"><label for="cap">最多愿意分摊的运费（日元）</label><input id="cap" type="number" inputmode="numeric" min="0" step="10" value="${me.cap}"></div>
       <div class="qty"><span style="width:auto;font-weight:400;font-size:13px;color:var(--ink-2)">数量</span>
         <div><button type="button" id="minus" aria-label="减少">−</button><span id="q">${me.qty}</span><button type="button" id="plus" aria-label="增加">+</button></div></div>
-      <button class="btn block" id="submit">加入 ${esc(L[sel].shopName)} 的拼单</button>
+      <button class="btn block" id="submit">加入拼单</button>
     </form>`;
     $main.querySelectorAll('.opt').forEach((el) => (el.onclick = () => { sel = Number(el.dataset.i); keep(); render(); }));
     const keep = () => {
@@ -228,7 +219,7 @@ async function pick(url) {
       } catch (err) {
         toast(err.message, 4000);
         btn.disabled = false;
-        btn.textContent = `加入 ${L[sel].shopName} 的拼单`;
+        btn.textContent = '加入拼单';
       }
     };
   };
@@ -252,17 +243,11 @@ function optCard(l, selected, me, idx) {
     else if (after.needItems != null) preview = `你加入后：${after.count} 件，每件均摊 ${jpy(after.perItem)} · 还差 ${after.needItems} 件全员达标`;
     else preview = '你填的上限为 0，这家店没有包邮门槛，成不了团';
   }
-  const people = p ? p.members.length : 0;
-  const pct = p ? progressView(p, tiers).pct : 0;
+  const people = p ? `${p.members.length} 人在拼 · ` : '';
   return `<div class="opt ${selected ? 'sel' : ''}" data-i="${idx}">
     <div class="opt-head"><label><input type="radio" name="shop" ${selected ? 'checked' : ''}>${esc(l.shopName)}</label><span class="price">${jpy(l.price)}</span></div>
-    <div class="tags">
-      <span class="tag ${people ? '' : 'plain'}">${people ? `${people} 人在拼` : '开新团'}</span>
-      <span class="tag plain">${describeTiers(tiers)}</span>
-      ${l.condition ? `<span class="tag plain">${esc(l.condition)}</span>` : ''}
-    </div>
-    ${p ? `<div class="bar sm"><i style="width:${pct}%"></i></div>` : ''}
-    <span class="preview">${preview}</span></div>`;
+    <span class="preview">${people}${describeTiers(tiers)}</span>
+    ${selected ? `<span class="preview strong">${preview.replace('你加入后：', '加入后 ')}</span>` : ''}</div>`;
 }
 
 // ---------- 拼单详情 / 撤销 / 成团分账 ----------
@@ -290,9 +275,9 @@ function renderOpen(d) {
   const headline = r.success
     ? '<span>条件已满足，正在成团…</span>'
     : r.threshold != null
-      ? `<span>还差</span><b>${jpy(r.needYen).slice(1)}</b><span>日元 包邮</span>`
+      ? `<span>还差</span><b>${jpy(r.needYen).slice(1)}</b><span>日元包邮</span>`
       : r.needItems != null
-        ? `<span>还差</span><b>${r.needItems}</b><span>件 全员达标，自动成团</span>`
+        ? `<span>还差</span><b>${r.needItems}</b><span>件成团</span>`
         : '<span>需要团长处理</span>';
   const mine = store.get('cn');
   $app.innerHTML = `
@@ -300,33 +285,22 @@ function renderOpen(d) {
     <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>${esc(d.order.shop_name)}</h1></div>
     <div class="big">${headline}</div>
     ${segN ? `<div class="segs" style="grid-template-columns:repeat(${segN},minmax(0,1fr))">${Array.from({ length: segN }, (_, i) => `<i class="${i < r.count ? 'on' : ''}"></i>`).join('')}</div>` : `<div class="bar" style="background:rgba(255,255,255,.32)"><i style="width:${v.pct}%;background:#fff"></i></div>`}
-    <div class="hero-meta"><span>${r.members.length} 人 · ${r.count} 件 · 已拼 ${jpy(r.subtotal)}</span><span>${describeTiers(d.tiers)}</span></div>
+    <div class="hero-meta"><span>${r.members.length} 人 · ${r.count} 件 · ${jpy(r.subtotal)}</span><span>${describeTiers(d.tiers)}</span></div>
   </header>
   <main>
     <section class="list">
-      <div class="list-head"><span>成员</span><span>分摊运费 / 上限</span></div>
       ${r.members
         .map(
-          (m) => `<div class="li">${av(m.member, 'lg')}
-          <div class="mid"><b>${esc(m.member)}${m.member === mine ? ' <span class="tag" style="font-size:11px;padding:1px 6px">我</span>' : ''}</b><span>${m.qty} 件 · ${jpy(m.goods)}</span></div>
-          <div class="end"><b>${jpy(m.share)}</b>${m.ok ? `<span class="good">≤ ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>`,
+          (m) => `<div class="li"><div class="mid"><b>${esc(m.member)}${m.member === mine ? '（我）' : ''}</b></div>
+          <div class="end"><b>运费 ${jpy(m.share)}</b>${m.ok ? `<span class="good">上限 ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>
+          ${d.items
+            .filter((i) => i.cn === m.member)
+            .map((i) => `<div class="sub"><a href="${esc(i.url)}" target="_blank" rel="noopener">${jpy(i.price)} × ${i.qty}</a><button class="mini" data-rm="${i.id}" data-cn="${esc(i.cn)}">撤销</button></div>`)
+            .join('')}`,
         )
         .join('')}
     </section>
-    ${v.hint ? `<p class="hint" style="background:#fff">${v.hint}</p>` : ''}
-    <section class="list">
-      <div class="list-head"><span>商品</span><span></span></div>
-      ${d.items
-        .map(
-          (i) => `<div class="li"><div class="mid"><b>${esc(i.cn)} · ${jpy(i.price)} × ${i.qty}</b><span><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title || i.url)}</a></span></div>
-          <button class="mini" data-rm="${i.id}" data-cn="${esc(i.cn)}">撤销</button></div>`,
-        )
-        .join('')}
-    </section>
-    <div class="grid2">
-      <a class="btn line" href="#/">再贴一个</a>
-      <button class="btn" id="share">复制分享文案</button>
-    </div>
+    <button class="btn block" id="share">复制链接发到群里</button>
   </main>`;
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm, b.dataset.cn, d)));
   document.getElementById('share').onclick = () => {
@@ -372,14 +346,9 @@ function renderDone(d) {
     <span style="font-size:13px">${closed ? '团长已关闭这个拼单' : `${when} · ${d.order.mail_status === 'sent' ? '下单邮件已发送给代购' : `邮件未发出（${esc((d.order.mail_status || '').replace('failed:', ''))}）`}`}</span>
   </header>
   <main>
-    <section class="card stats">
-      <div><span>商品合计</span><b>${jpy(r.subtotal)}</b></div>
-      <div><span>运费</span><b>${jpy(r.fee)}</b></div>
-      <div><span>每件运费</span><b style="color:var(--ok)">${jpy(r.perItem)}</b></div>
-    </section>
     <section class="list">
-      <h2 style="margin:0;padding:12px 0 6px;font-size:15px">谁该付多少</h2>
-      ${s.rows.map((x) => `<div class="li">${av(x.member, 'lg')}<div class="mid"><b>${esc(x.member)}</b><span>${x.qty} 件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</span></div><b style="font-size:17px;font-weight:900">${jpy(x.total)}</b></div>`).join('')}
+      <div class="list-head"><span>运费 ${jpy(r.fee)}${r.count ? ` · 每件 ${jpy(r.perItem)}` : ''}</span><span>应付</span></div>
+      ${s.rows.map((x) => `<div class="li"><div class="mid"><b>${esc(x.member)}</b><span>${x.qty} 件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</span></div><b style="font-size:17px;font-weight:900">${jpy(x.total)}</b></div>`).join('')}
       <div class="total"><span style="font-weight:700">总计</span><b>${jpy(s.sum)}</b></div>
       ${s.rounding ? `<p class="muted" style="margin:0 0 10px">四舍五入差额 ${jpy(s.rounding)}</p>` : ''}
     </section>
