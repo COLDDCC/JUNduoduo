@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS items (
   product_id  TEXT NOT NULL,
   url         TEXT NOT NULL,
   title       TEXT,
+  image       TEXT,
   price       INTEGER NOT NULL,
   qty         INTEGER NOT NULL DEFAULT 1,
   created_at  INTEGER NOT NULL,

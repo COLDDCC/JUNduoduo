@@ -105,12 +105,21 @@ export function parseOtherPage(html, productId) {
     });
   }
   const listings = [...seen.values()].sort((a, b) => (a.price ?? 9e9) - (b.price ?? 9e9));
-  return { productId, title, listings };
+  return { productId, title, image: parseImage(html, productId), listings };
 }
 
 function lastYen(s) {
   const all = [...String(s).matchAll(/([\d,]+)\s*円/g)];
   return all.length ? Number(all[all.length - 1][1].replace(/,/g, '')) : null;
+}
+
+/** 商品图：优先取 og:image，取不到就用骏和屋商品图的常见地址 */
+export function parseImage(html, productId) {
+  const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (og && /^https?:\/\//.test(og[1])) return og[1].replace(/&amp;/g, '&');
+  const img = html.match(new RegExp(`(https://www\\.suruga-ya\\.jp/database/[^"'\\s]*${productId}[^"'\\s]*\\.(?:jpg|png|webp))`));
+  return img ? img[1] : `${BASE}/database/pics_light/game/${productId}.jpg`;
 }
 
 export function parseTitle(html) {

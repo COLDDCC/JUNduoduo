@@ -32,6 +32,7 @@ test('链接里的出品信息', () => {
 test('解析在售店铺列表（去重、本店、按价格排序）', () => {
   const r = parseOtherPage(fx('other.html'), '120158641');
   assert.match(r.title, /進撃の巨人/);
+  assert.equal(r.image, 'https://www.suruga-ya.jp/database/pics_light/game/120158641.jpg');
   assert.equal(r.listings.length, 4);
   assert.deepEqual(
     r.listings.map((l) => [l.shopId, l.branch, l.price]),

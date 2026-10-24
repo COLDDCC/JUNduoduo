@@ -146,7 +146,7 @@ async function api(req, env, url) {
         return { ...l, tiers: shop.tiers, tiersSource: shop.source, tiersError: shop.error, openOrderId: open?.id || null, progress };
       }),
     );
-    return json({ productId: data.productId, title: data.title, hint: data.hint, prefecture: pref, listings: shops });
+    return json({ productId: data.productId, title: data.title, image: data.image, hint: data.hint, prefecture: pref, listings: shops });
   }
 
   // 首页：正在拼 + 最近成团
@@ -212,8 +212,8 @@ async function api(req, env, url) {
     }
     await env.DB.batch([
       env.DB.prepare(
-        'INSERT INTO items (id, order_id, member_id, product_id, url, title, price, qty, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
-      ).bind(uid(), order.id, member.id, productId, listing.url, product.title, listing.price, qty, now()),
+        'INSERT INTO items (id, order_id, member_id, product_id, url, title, image, price, qty, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      ).bind(uid(), order.id, member.id, productId, listing.url, product.title, product.image, listing.price, qty, now()),
       env.DB.prepare(
         'INSERT INTO caps (order_id, member_id, cap) VALUES (?,?,?) ON CONFLICT(order_id, member_id) DO UPDATE SET cap=excluded.cap',
       ).bind(order.id, member.id, cap),

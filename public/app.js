@@ -16,6 +16,10 @@ const store = {
 const AV_COLORS = ['#F3D7C9', '#D9E4EF', '#E3DCF0', '#DCEBDD', '#FCE3B8', '#F5D0DC', '#D6ECEC'];
 const avColor = (s) => AV_COLORS[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % AV_COLORS.length];
 const av = (cn, cls = '') => `<span class="av ${cls}" style="background:${avColor(cn)}">${esc([...cn][0] || '?')}</span>`;
+const thumb = (src, cls = '') =>
+  `<span class="thumb ${cls}">${src ? `<img src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>`;
+const searchIcon =
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
 const backIcon =
   '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 
@@ -98,23 +102,28 @@ window.addEventListener('hashchange', route);
 // ---------- 首页 ----------
 async function home() {
   $app.innerHTML = `
-  <header class="hero">
-    <div class="hero-top"><div class="brand">骏和屋拼单</div><div class="pill" id="pref">收货地 · 大阪</div></div>
-    <label for="link">贴上骏和屋商品链接，看看哪家店能拼</label>
-    <form class="row" id="go">
-      <input id="link" type="url" inputmode="url" placeholder="https://www.suruga-ya.jp/product/…" required>
-      <button class="btn dark" style="height:46px;border-radius:10px">开拼</button>
+  <header class="topbar">
+    <div class="topbar-row"><span class="brand">骏和屋拼单</span><span class="muted" id="pref">发往大阪</span></div>
+    <form class="search" id="go" role="search">
+      ${searchIcon}
+      <input id="link" type="url" inputmode="url" placeholder="粘贴骏和屋商品链接" aria-label="粘贴骏和屋商品链接" required>
+      <button>开拼</button>
     </form>
   </header>
   <main id="list"><p class="loading">读取中…</p></main>`;
+  const $link = document.getElementById('link');
   document.getElementById('go').onsubmit = (e) => {
     e.preventDefault();
-    location.hash = `#/pick?url=${encodeURIComponent(document.getElementById('link').value.trim())}`;
+    location.hash = `#/pick?url=${encodeURIComponent($link.value.trim())}`;
   };
+  // 粘贴后直接跳转，省一次点击
+  $link.addEventListener('paste', () => setTimeout(() => {
+    if (/suruga-ya\.jp\/product\//.test($link.value)) document.getElementById('go').requestSubmit();
+  }, 0));
   const load = async () => {
     try {
       const d = await api('/api/orders');
-      document.getElementById('pref').textContent = `收货地 · ${d.prefecture.replace(/[府県都]$/, '')}`;
+      document.getElementById('pref').textContent = `发往${d.prefecture.replace(/[府県都]$/, '')}`;
       renderHome(d.orders);
     } catch (e) {
       document.getElementById('list').innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
@@ -130,8 +139,8 @@ function renderHome(orders) {
   const $list = document.getElementById('list');
   if (!$list) return;
   $list.innerHTML = `
-    <div class="sec-title"><h2>正在拼 · ${open.length}</h2></div>
-    ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">还没有人开团。贴一个链接，做第一个吧。</p>'}
+    <div class="sec-title"><h2>正在拼的分店 · ${open.length}</h2></div>
+    ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">还没有人开团，在上面粘贴链接开第一个吧。</p>'}
     ${done.length ? `<div class="sec-title" style="margin-top:8px"><h2 style="font-size:15px;color:var(--quiet)">已成团</h2></div>` : ''}
     ${done
       .map(
@@ -143,13 +152,22 @@ function renderHome(orders) {
       .join('')}`;
 }
 
+function whoLine(r) {
+  return r.members.map((m) => `${esc(m.member)} ${m.qty}件 ${jpy(m.goods)}`).join('、');
+}
+
 function shopCard(d) {
   const r = d.result;
   const v = progressView(r, d.tiers);
-  return `<a class="card link" href="#/order/${d.order.id}">
-    <div class="card-head"><h3>${esc(d.order.shop_name)}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
-    <div class="bar"><i style="width:${v.pct}%"></i></div>
-    <div class="meta"><span>${v.left}</span><span class="muted">${v.right}</span></div></a>`;
+  const imgs = [...new Map(d.items.map((i) => [i.product_id, i.image])).values()];
+  return `<a class="card link shop" href="#/order/${d.order.id}">
+    <div class="shop-img">${thumb(imgs[0], 'lg')}${imgs.length > 1 ? `<span class="more">+${imgs.length - 1}</span>` : ''}</div>
+    <div class="shop-body">
+      <div class="card-head"><h3>${esc(d.order.shop_name)}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
+      <div class="bar sm"><i style="width:${v.pct}%"></i></div>
+      <div class="who">${whoLine(r)}</div>
+      <div class="meta"><span>合计 ${r.count} 件 · ${jpy(r.subtotal)}</span><span class="muted">${r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮'}</span></div>
+    </div></a>`;
 }
 
 // ---------- 贴链接 → 选分店 ----------
@@ -179,7 +197,7 @@ async function pick(url) {
 
   const render = () => {
     $main.innerHTML = `
-    <div class="product-title">${esc(data.title || '骏和屋商品')}</div>
+    <div class="product">${thumb(data.image, 'lg')}<div class="product-title">${esc(data.title || '骏和屋商品')}</div></div>
     ${L.map((l, i) => optCard(l, i === sel, me, i)).join('')}
     <form class="form" id="join">
       <div class="grid2">
@@ -295,7 +313,7 @@ function renderOpen(d) {
           <div class="end"><b>运费 ${jpy(m.share)}</b>${m.ok ? `<span class="good">上限 ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>
           ${d.items
             .filter((i) => i.cn === m.member)
-            .map((i) => `<div class="sub"><a href="${esc(i.url)}" target="_blank" rel="noopener">${jpy(i.price)} × ${i.qty}</a><button class="mini" data-rm="${i.id}" data-cn="${esc(i.cn)}">撤销</button></div>`)
+            .map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a><button class="mini" data-rm="${i.id}" data-cn="${esc(i.cn)}">撤销</button></div>`)
             .join('')}`,
         )
         .join('')}
