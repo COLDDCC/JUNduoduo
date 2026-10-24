@@ -49,22 +49,31 @@ function describeTiers(tiers) {
   return tiers.map((t) => `${jpy(t.min)}起 ${jpy(t.fee)}`).join(' / ');
 }
 
-/** 统一的进度描述，首页卡片、选店、详情页共用。一律按金额表达 */
+/** 统一的进度描述，首页卡片、选店、详情页共用。包邮按金额，均摊看每件运费是否在大家上限内 */
 function progressView(r) {
   const people = `${r.members.length} 人 · ${r.count} 件`;
+  const perItem = r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮';
   if (r.success) {
-    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: r.reason === 'free' ? '已包邮' : `运费 ${jpy(r.fee)} 按金额分摊`, headline: '<span>条件已满足，正在成团…</span>' };
+    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: perItem, headline: '<span>条件已满足，正在成团…</span>' };
   }
-  if (r.needYen == null) {
-    return { tag: '需包邮', pct: 0, left: `${people} · ${jpy(r.subtotal)}`, right: '', headline: '<span>有人只接受包邮，这家店没有包邮门槛，请团长处理</span>' };
+  const over = r.overCount ? `${r.overCount} 人超出运费上限` : '';
+  if (r.needFreeYen != null) {
+    return {
+      tag: `差 ${jpy(r.needFreeYen)} 包邮`,
+      pct: Math.min(100, (r.subtotal / r.threshold) * 100),
+      left: `${people} · 已拼 <b>${jpy(r.subtotal)}</b>`,
+      right: `满 ${jpy(r.threshold)} 包邮`,
+      headline: `<span>还差</span><b>${jpy(r.needFreeYen).slice(1)}</b><span>日元包邮</span>`,
+      sub: over ? `不包邮的话${perItem}，${over}` : '',
+    };
   }
-  const pct = r.target ? Math.min(100, (r.subtotal / r.target) * 100) : 0;
   return {
-    tag: `差 ${jpy(r.needYen)}`,
-    pct,
-    left: `${people} · 已拼 <b>${jpy(r.subtotal)}</b>`,
-    right: r.via === 'free' ? `满 ${jpy(r.target)} 包邮` : `拼到 ${jpy(r.target)} 运费全员达标`,
-    headline: `<span>还差</span><b>${jpy(r.needYen).slice(1)}</b><span>日元${r.via === 'free' ? '包邮' : '成团'}</span>`,
+    tag: r.overCount ? `${r.overCount} 人超上限` : '等人加入',
+    pct: Math.min(100, r.splitProgress * 100),
+    left: `${people} · ${jpy(r.subtotal)}`,
+    right: perItem,
+    headline: `<span>现在</span><b>${jpy(r.perItem).slice(1)}</b><span>日元/件 运费</span>`,
+    sub: over ? `${over}，人越多每件越便宜` : '',
   };
 }
 
@@ -243,9 +252,9 @@ function optCard(l, selected, me, idx) {
   let preview = '运费未读到，加入后由团长确认';
   if (after) {
     const mine = after.members.find((m) => m.member === self);
-    if (after.success) preview = after.reason === 'free' ? `你加入后：${jpy(after.subtotal)} · 直接包邮成团` : `你加入后：你分摊运费 ${jpy(mine.share)} · 直接成团`;
-    else if (after.needYen != null) preview = `你加入后：已拼 ${jpy(after.subtotal)} · 还差 ${jpy(after.needYen)}${after.via === 'free' ? '包邮' : '成团'}`;
-    else preview = '你填的上限为 0，这家店没有包邮门槛，成不了团';
+    if (after.success) preview = after.reason === 'free' ? `你加入后：${jpy(after.subtotal)} · 直接包邮成团` : `你加入后：每件运费 ${jpy(after.perItem)} · 直接成团`;
+    else if (after.needFreeYen != null) preview = `你加入后：已拼 ${jpy(after.subtotal)} · 还差 ${jpy(after.needFreeYen)} 包邮`;
+    else preview = `你加入后：每件运费 ${jpy(after.perItem)}，你分摊 ${jpy(mine.share)}${mine.ok ? '' : '（超出你的上限）'}`;
   }
   const people = p ? `${p.members.length} 人在拼 · ` : '';
   return `<div class="opt ${selected ? 'sel' : ''}" data-i="${idx}">
@@ -281,7 +290,8 @@ function renderOpen(d) {
     <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>${esc(d.order.shop_name)}</h1></div>
     <div class="big">${headline}</div>
     <div class="bar" style="background:rgba(255,255,255,.32)"><i style="width:${v.pct}%;background:#fff"></i></div>
-    <div class="hero-meta"><span>已拼 ${jpy(r.subtotal)}${r.target && !r.success ? ` / ${jpy(r.target)}` : ''}</span><span>${describeTiers(d.tiers)}</span></div>
+    <div class="hero-meta"><span>${r.members.length} 人 · ${r.count} 件 · 已拼 ${jpy(r.subtotal)}${r.threshold && !r.success ? ` / ${jpy(r.threshold)}` : ''}</span><span>${describeTiers(d.tiers)}</span></div>
+    ${v.sub ? `<div style="font-size:13px">${v.sub}</div>` : ''}
   </header>
   <main>
     <section class="list">
@@ -343,7 +353,7 @@ function renderDone(d) {
   </header>
   <main>
     <section class="list">
-      <div class="list-head"><span>运费 ${jpy(r.fee)}${r.fee ? ' · 按金额分摊' : ''}</span><span>应付</span></div>
+      <div class="list-head"><span>运费 ${jpy(r.fee)}${r.fee ? ` · 每件 ${jpy(r.perItem)}` : ''}</span><span>应付</span></div>
       ${s.rows.map((x) => `<div class="li"><div class="mid"><b>${esc(x.member)}</b><span>${x.qty} 件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</span></div><b style="font-size:17px;font-weight:900">${jpy(x.total)}</b></div>`).join('')}
       <div class="total"><span style="font-weight:700">总计</span><b>${jpy(s.sum)}</b></div>
       ${s.rounding ? `<p class="muted" style="margin:0 0 10px">四舍五入差额 ${jpy(s.rounding)}</p>` : ''}

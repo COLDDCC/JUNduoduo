@@ -12,7 +12,7 @@ test('分档运费与包邮门槛', () => {
   assert.equal(freeThreshold(fixed400), null);
 });
 
-test('运费按金额比例分摊，买得多的人分得多', () => {
+test('运费按件数平分：3 件时每件 133，小鹿超上限', () => {
   const r = evaluate({
     tiers: fixed400,
     items: [
@@ -22,33 +22,29 @@ test('运费按金额比例分摊，买得多的人分得多', () => {
     ],
     caps: { 阿柚: 150, 小鹿: 100, 糯米: 150 },
   });
-  assert.equal(r.subtotal, 2560);
-  assert.deepEqual(r.members.map((m) => Math.round(m.share)), [106, 188, 106]);
+  assert.equal(Math.round(r.perItem), 133);
   assert.deepEqual(r.members.map((m) => m.ok), [true, false, true]);
-  // 小鹿要求 400×1200÷100 = 4800，差 2240
+  assert.equal(r.overCount, 1);
+  assert.equal(r.needFreeYen, null);
   assert.equal(r.success, false);
-  assert.equal(r.via, 'split');
-  assert.equal(r.target, 4800);
-  assert.equal(r.needYen, 2240);
+  assert.equal(Math.round(r.splitProgress * 100), 75); // 3 / 4
 });
 
-test('总金额够了全员达标就成团', () => {
+test('第 4 件加入后全员达标成团', () => {
   const r = evaluate({
     tiers: fixed400,
     items: [
       { member: '阿柚', price: 680, qty: 1 },
       { member: '小鹿', price: 1200, qty: 1 },
-      { member: '糯米', price: 2920, qty: 1 },
+      { member: '糯米', price: 680, qty: 2 },
     ],
-    caps: { 阿柚: 150, 小鹿: 100, 糯米: 300 },
+    caps: { 阿柚: 150, 小鹿: 100, 糯米: 200 },
   });
-  assert.equal(r.subtotal, 4800);
   assert.equal(r.success, true);
   assert.equal(r.reason, 'split');
-  assert.equal(r.needYen, 0);
 });
 
-test('满额包邮店：差多少钱包邮', () => {
+test('满额包邮店：按金额算差多少包邮', () => {
   const r = evaluate({
     tiers: sanyodo,
     items: [
@@ -59,20 +55,19 @@ test('满额包邮店：差多少钱包邮', () => {
     caps: { 栗子: 0, 阿柚: 0, 七七: 0 },
   });
   assert.equal(r.success, false);
-  assert.equal(r.needYen, 620);
-  assert.equal(r.via, 'free');
-  assert.equal(r.needSplitYen, null); // 都只接受包邮
+  assert.equal(r.needFreeYen, 620);
+  assert.equal(r.overCount, 3);
 });
 
-test('包邮和均摊两条路取更近的', () => {
+test('有包邮门槛的店，没到包邮但均摊全员达标也能成团', () => {
   const r = evaluate({
     tiers: sanyodo,
-    items: [{ member: 'A', price: 1000, qty: 1 }, { member: 'B', price: 500, qty: 1 }],
-    caps: { A: 400, B: 200 },
+    items: [{ member: 'A', price: 800, qty: 1 }, { member: 'B', price: 700, qty: 1 }],
+    caps: { A: 300, B: 300 },
   });
-  // 包邮差 500；均摊：A 要 550×1000÷400=1375，B 要 550×500÷200=1375 → 已满足？ 1500 ≥ 1375，A 分 367 ≤ 400，B 分 183 ≤ 200
   assert.equal(r.success, true);
   assert.equal(r.reason, 'split');
+  assert.equal(r.perItem, 275);
 });
 
 test('达到门槛即包邮成团', () => {
@@ -82,20 +77,21 @@ test('达到门槛即包邮成团', () => {
   assert.equal(r.fee, 0);
 });
 
-test('结算：每人应付 = 商品 + 按金额分摊的运费', () => {
+test('结算：池袋乙女館 5 件每件 80', () => {
   const r = evaluate({
     tiers: fixed400,
     items: [
-      { member: '小鹿', price: 1000, qty: 2 },
-      { member: '栗子', price: 1000, qty: 1 },
-      { member: '阿柚', price: 1000, qty: 1 },
+      { member: '小鹿', price: 450, qty: 2 },
+      { member: '栗子', price: 1500, qty: 1 },
+      { member: '阿柚', price: 780, qty: 1 },
+      { member: '七七', price: 320, qty: 1 },
     ],
-    caps: { 小鹿: 200, 栗子: 100, 阿柚: 100 },
+    caps: { 小鹿: 200, 栗子: 100, 阿柚: 100, 七七: 100 },
   });
   assert.equal(r.success, true);
   const s = settle(r);
-  assert.deepEqual(s.rows.map((x) => x.shipping), [200, 100, 100]);
-  assert.equal(s.sum, 4400);
+  assert.deepEqual(s.rows.map((x) => x.shipping), [160, 80, 80, 80]);
+  assert.equal(s.sum, 3900);
   assert.equal(s.rounding, 0);
 });
 

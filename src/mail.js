@@ -25,7 +25,7 @@ export function buildMail({ order, items, result, siteUrl }) {
   const html = `
 <div style="font-family:sans-serif;font-size:14px;color:#1f1a17">
 <h2 style="margin:0 0 8px">${esc(order.shop_name)} 已成团，请下单</h2>
-<p>${result.reason === 'free' ? '已达包邮门槛，运费 ¥0。' : `运费 ${jpy(result.fee)}，按商品金额比例分摊。`}</p>
+<p>${result.reason === 'free' ? '已达包邮门槛，运费 ¥0。' : `运费 ${jpy(result.fee)}，按件均摊，每件 ${jpy(result.perItem)}。`}</p>
 <h3>下单商品（共 ${result.count} 件，合计 ${jpy(result.subtotal)}）</h3>
 <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse">
 <tr><th>CN</th><th>商品链接</th><th>单价</th><th>数量</th></tr>${itemRows}</table>
