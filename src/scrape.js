@@ -249,6 +249,33 @@ export function parseDeliveryPage(html, prefecture = '大阪府') {
   return { shopName, tiers };
 }
 
+/** 只有一家第三方店铺时，/product/other/ 可能直接跳转到该店的详情页。
+ * 这种页面没有带 branch_number 的商品链接，因此从店铺身份、库存和当前售价恢复出品。
+ */
+export function parseSingleShopDetail(html, productId) {
+  if (/申し訳ございません。品切れ中です。/.test(html)) return null;
+  const shopId = html.match(/(?:[?&]|&amp;)tenpo_cd=(\\d+)/)?.[1] ||
+    html.match(/name=["']tenpo_cd["'][^>]*value=["'](\\d+)/i)?.[1] ||
+    html.match(/value=["'](\\d+)["'][^>]*name=["']tenpo_cd["']/i)?.[1];
+  if (!shopId) return null;
+  const stock = html.match(/在庫数\\s*[：:]\\s*(\\d+)/);
+  if (stock && Number(stock[1]) <= 0) return null;
+  const price = (() => {
+    const m = html.match(/(?:中古|新品)[\\s\\S]{0,500}?([\\d,]+)\\s*円\\s*(?:\\(税込\\))?\\s*在庫数/);
+    return m ? Number(m[1].replace(/,/g, '')) : null;
+  })();
+  if (price == null) return null;
+  const name = html.match(new RegExp(`/shop/${shopId}["'][^>]*>([\\s\\S]*?)<\\/a>`));
+  return {
+    shopId,
+    shopName: name ? cleanShopName(decode(name[1])) : `店铺 ${shopId}`,
+    branch: null,
+    price,
+    condition: null,
+    url: `${BASE}/product/detail/${productId}?tenpo_cd=${shopId}`,
+  };
+}
+
 /** 骏和屋本店的默认运费（需要团长在后台确认，可覆盖） */
 export const HONTEN_DEFAULT_TIERS = [
   { min: 0, fee: 440 },
