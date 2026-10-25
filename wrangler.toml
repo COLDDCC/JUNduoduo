@@ -9,8 +9,8 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "junduoduo"
-# 第一次部署前运行 `npx wrangler d1 create junduoduo`，把输出的 database_id 填到这里
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+# D1 数据库：junduoduo
+database_id = "59fc3f6d-e7c6-443c-982c-a9adda6a8ab0"
 
 [vars]
 GROUP_NAME = "骏和屋拼单"
