@@ -117,10 +117,10 @@ export function parseOtherPage(html, productId) {
 /** Parse the actual sale price next to stock, ignoring MSRP, shipping and buyback prices. */
 export function parseDetailSale(html) {
   const txt = decode(String(html)
-    .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')
-    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' '));
-  const m = txt.match(/(中古|新品)(?:\\s|[^円]){0,100}?([\\d,]+)\\s*円\\s*(?:\\(税込\\))?\\s*在庫数\\s*[：:]?\\s*(\\d+)/);
+  const m = txt.match(/(中古|新品)[^\n円]{0,100}?([\d,]+)\s*円\s*(?:\(税込\))?\s*在庫数\s*[：:]?\s*(\d+)/);
   if (!m || Number(m[3]) === 0) return { price: null, condition: null };
   return { price: Number(m[2].replace(/,/g, '')), condition: m[1] };
 }
