@@ -223,3 +223,10 @@ test('店铺独自商品（ZHORE…）也能贴链接、加入', async () => {
   assert.equal(r.data.items[0].price, 650);
   assert.equal(r.data.items[0].url, Z);
 });
+
+test('海外站链接：按日本站同一编号抓取在售店铺', async () => {
+  const s = await call(`/api/scrape?url=${encodeURIComponent('https://www.suruga-ya.com/zh-hans/product/120158641')}`);
+  assert.equal(s.status, 200, s.data.error);
+  assert.equal(s.data.listings.length, 4);
+  assert.match(s.data.listings[0].url, /^https:\/\/www\.suruga-ya\.jp\/product\/detail\/120158641\?/);
+});

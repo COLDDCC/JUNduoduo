@@ -142,7 +142,7 @@ async function home() {
   };
   // 粘贴后直接跳转，省一次点击
   $link.addEventListener('paste', () => setTimeout(() => {
-    if (/suruga-ya\.jp\/product\//.test($link.value)) document.getElementById('go').requestSubmit();
+    if (/suruga-ya\.(jp|com)\/(?:[\w-]+\/)?product\//.test($link.value)) document.getElementById('go').requestSubmit();
   }, 0));
   const load = async () => {
     try {

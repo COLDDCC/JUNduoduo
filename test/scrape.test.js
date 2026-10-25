@@ -104,7 +104,7 @@ test('店铺链接只有 tenpo_cd、没有 branch_number 时仍可解析', () =>
   const r = parseOtherPage(html, 'ZHORE185731');
   assert.equal(r.listings.length, 1);
   assert.equal(r.listings[0].shopId, '200985');
-  assert.equal(r.listings[0].branch, null);
+  assert.equal(r.listings[0].branch, '-', '没有 branch_number 用占位，否则加入时会被拒');
   assert.equal(r.listings[0].price, 650);
   assert.equal(r.listings[0].url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
 });
@@ -125,4 +125,12 @@ test('商品详情 HTML 标签隔开价格和库存时仍识别 650 日元', () 
   const html = '<div>中古 <strong>650円</strong> (税込) ' + '<span class="space"></span>'.repeat(1200) + '<span>在庫数：1</span></div>';
   assert.deepEqual(parseDetailSale(html), { price: 650, condition: '中古' });
   assert.deepEqual(parseDetailSale('<p>中古 650円 (税込) 在庫数：0</p>'), { price: null, condition: null });
+});
+
+test('海外站链接也能认出商品编号', () => {
+  assert.equal(parseProductId('https://www.suruga-ya.com/zh-hans/product/646231689'), '646231689');
+  assert.equal(parseProductId('https://www.suruga-ya.com/en/product/646231689?foo=1'), '646231689');
+  assert.equal(parseProductId('https://www.suruga-ya.com/product/646231689'), '646231689');
+  assert.equal(parseProductId('https://www.suruga-ya.com/zh-hant/product/ZHORE185731'), 'ZHORE185731');
+  assert.equal(parseProductId('https://www.suruga-ya.com/zh-hans/search?keyword=x'), null);
 });

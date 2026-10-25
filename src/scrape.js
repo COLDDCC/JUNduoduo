@@ -12,10 +12,14 @@ const UA =
 /**
  * 从各种骏和屋商品链接里取出商品编号。
  * 支持：/product/other/120158641、/product/detail/120158641?branch_number=0071、
- *       /product/detail/120158641?tenpo_cd=400486&branch_number=0001
+ *       /product/detail/120158641?tenpo_cd=400486&branch_number=0001、
+ *       海外站 suruga-ya.com/zh-hans/product/646231689
  */
 export function parseProductId(url) {
-  const m = String(url).match(/suruga-ya\.jp\/product\/(?:other|detail)\/([0-9A-Za-z]+)/);
+  const u = String(url);
+  const m = u.match(/suruga-ya\.jp\/product\/(?:other|detail)\/([0-9A-Za-z]+)/) ||
+    // 海外站：suruga-ya.com/zh-hans/product/646231689、suruga-ya.com/product/646231689，编号和日本站相同
+    u.match(/suruga-ya\.com\/(?:[a-z]{2}(?:-[a-z]+)?\/)?product\/(?:(?:other|detail)\/)?([0-9A-Za-z]+)/i);
   return m ? m[1] : null;
 }
 
@@ -69,10 +73,12 @@ export function parseOtherPage(html, productId) {
   );
   const hits = [];
   let m;
-  while ((m = linkRe.exec(html))) {
+  // <meta>/<link> 里的 App 跳转地址也带 tenpo_cd，不是出品；替换成等长空白，保持下标不变
+  const body = html.replace(/<(?:meta|link)\b[^>]*>/gi, (t) => ' '.repeat(t.length));
+  while ((m = linkRe.exec(body))) {
     const query = m[1].replace(/&amp;/g, '&');
-    const tenpo = query.match(/(?:^|&)tenpo_cd=(\\d+)/)?.[1] || null;
-    const branch = query.match(/(?:^|&)branch_number=(\\d+)/)?.[1] || null;
+    const tenpo = query.match(/(?:^|&)tenpo_cd=(\d+)/)?.[1] || null;
+    const branch = query.match(/(?:^|&)branch_number=(\d+)/)?.[1] || null;
     hits.push({ idx: m.index, tenpo, branch });
   }
 
@@ -104,7 +110,7 @@ export function parseOtherPage(html, productId) {
     seen.set(key, {
       shopId,
       shopName,
-      branch: h.branch,
+      branch: h.branch || SINGLE_BRANCH,
       price,
       condition: cond ? decode(cond) : null,
       url: `${BASE}/product/detail/${productId}?${[h.tenpo && `tenpo_cd=${h.tenpo}`, h.branch && `branch_number=${h.branch}`].filter(Boolean).join('&')}`,
@@ -248,14 +254,14 @@ export function parseDeliveryPage(html, prefecture = '大阪府') {
  */
 export function parseSingleShopDetail(html, productId) {
   if (/申し訳ございません。品切れ中です。/.test(html)) return null;
-  const shopId = html.match(/(?:[?&]|&amp;)tenpo_cd=(\\d+)/)?.[1] ||
-    html.match(/name=["']tenpo_cd["'][^>]*value=["'](\\d+)/i)?.[1] ||
-    html.match(/value=["'](\\d+)["'][^>]*name=["']tenpo_cd["']/i)?.[1];
+  const shopId = html.match(/(?:[?&]|&amp;)tenpo_cd=(\d+)/)?.[1] ||
+    html.match(/name=["']tenpo_cd["'][^>]*value=["'](\d+)/i)?.[1] ||
+    html.match(/value=["'](\d+)["'][^>]*name=["']tenpo_cd["']/i)?.[1];
   if (!shopId) return null;
-  const stock = html.match(/在庫数\\s*[：:]\\s*(\\d+)/);
+  const stock = html.match(/在庫数\s*[：:]\s*(\d+)/);
   if (stock && Number(stock[1]) <= 0) return null;
   const price = (() => {
-    const m = html.match(/(?:中古|新品)[\\s\\S]{0,500}?([\\d,]+)\\s*円\\s*(?:\\(税込\\))?\\s*在庫数/);
+    const m = html.match(/(?:中古|新品)[\s\\S]{0,500}?([\d,]+)\s*円\s*(?:\(税込\))?\s*在庫数/);
     return m ? Number(m[1].replace(/,/g, '')) : null;
   })();
   if (price == null) return null;
