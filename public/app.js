@@ -102,15 +102,14 @@ window.addEventListener('hashchange', route);
 // ---------- 首页 ----------
 async function home() {
   $app.innerHTML = `
-  <header class="topbar">
-    <div class="topbar-row"><span class="brand">骏和屋拼单</span><span class="muted" id="pref">发往大阪</span></div>
-    <form class="search" id="go" role="search">
-      ${searchIcon}
-      <input id="link" type="url" inputmode="url" placeholder="粘贴骏和屋商品链接" aria-label="粘贴骏和屋商品链接" required>
-      <button>开拼</button>
+  <header class="lite-head">
+    <div class="lite-row"><span class="lite-brand">骏和屋拼单</span><span class="lite-meta" id="pref">大阪</span></div>
+    <form class="lite-search" id="go" role="search">
+      <input id="link" type="url" inputmode="url" placeholder="粘贴商品链接" aria-label="粘贴骏和屋商品链接" required>
+      <button aria-label="开拼">${searchIcon}</button>
     </form>
   </header>
-  <main id="list"><p class="loading">读取中…</p></main>`;
+  <main id="list" class="lite-main"><p class="loading">读取中</p></main>`;
   const $link = document.getElementById('link');
   document.getElementById('go').onsubmit = (e) => {
     e.preventDefault();
@@ -123,7 +122,7 @@ async function home() {
   const load = async () => {
     try {
       const d = await api('/api/orders');
-      document.getElementById('pref').textContent = `发往${d.prefecture.replace(/[府県都]$/, '')}`;
+      document.getElementById('pref').textContent = d.prefecture.replace(/[府県都]$/, '');
       renderHome(d.orders);
     } catch (e) {
       document.getElementById('list').innerHTML = `<p class="empty-state">${esc(e.message)}</p>`;
@@ -138,18 +137,28 @@ function renderHome(orders) {
   const done = orders.filter((o) => o.order.status === 'done');
   const $list = document.getElementById('list');
   if (!$list) return;
+  // 最接近成团的那家高亮
+  open.sort((x, y) => progressView(y.result).pct - progressView(x.result).pct);
+  const lead = open[0];
   $list.innerHTML = `
-    <div class="sec-title"><h2>正在拼的分店 · ${open.length}</h2></div>
-    ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">暂无拼单</p>'}
-    ${done.length ? `<div class="sec-title" style="margin-top:8px"><h2 style="font-size:15px;color:var(--quiet)">已成团</h2></div>` : ''}
-    ${done
-      .map(
-        (o) => `<a class="done-link" href="#/order/${o.order.id}">
-          <div style="display:flex;flex-direction:column;gap:3px"><b>${esc(o.order.shop_name)}</b>
-          <span class="muted">${o.result.members.length} 人 · ${o.result.count} 件${o.order.mail_status === 'sent' ? '' : ' · 邮件未发出'}</span></div>
-          <span class="tag ok">已成团</span></a>`,
-      )
-      .join('')}`;
+    <p class="lite-cap">拼单中 ${open.length}</p>
+    <div class="pills">${open.length ? open.map((o) => shopPill(o, o === lead)).join('') : '<p class="lite-empty">暂无</p>'}</div>
+    ${done.length ? `<p class="lite-cap">已成团 ${done.length}</p><div class="pills">${done.map((o) => shopPill(o, false, true)).join('')}</div>` : ''}`;
+}
+
+/** 一家店 = 一根胶囊：长度就是进度，右边一个数字 */
+function shopPill(d, lead, done) {
+  const r = d.result;
+  const v = progressView(r);
+  const iAmIn = d.me && r.members.some((m) => m.member === d.me);
+  let unit, num;
+  if (done || r.success) [unit, num] = ['', '成团'];
+  else if (r.needFreeYen != null) [unit, num] = ['差', jpy(r.needFreeYen)];
+  else [unit, num] = ['每件', jpy(r.perItem)];
+  const w = done ? 100 : Math.round(74 + 0.26 * v.pct);
+  return `<a class="pill${lead ? ' lead' : ''}${done ? ' done' : ''}" href="#/order/${d.order.id}" style="width:${w}%">
+    <span class="pill-l"><b>${esc(d.order.shop_name)}</b><small>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)}${iAmIn ? ' · 我' : ''}</small></span>
+    <span class="pill-r">${unit ? `<small>${unit}</small>` : ''}<span>${num}</span></span></a>`;
 }
 
 function whoLine(r) {
