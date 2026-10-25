@@ -128,6 +128,7 @@ export function parseDetailSale(html) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/&yen;|&#165;|&#xA5;/gi, '円')
     .replace(/[\u00a0\u2000-\u200b\u202f\u3000]/g, ' '));
+  if (/在庫数\s*[：:]?\s*0(?:\D|$)/.test(txt) && !/在庫数\s*[：:]?\s*[1-9]/.test(txt)) return { price: null, condition: null };
   const patterns = [
     /(?:中古|新品)[^円]{0,250}?([\d,]+)\s*円(?:\s*[\(（]税込[\)）])?(?:\s|[^円]){0,160}?在庫数\s*[：:]?\s*(\d+)/,
     /([\d,]+)\s*円(?:\s*[\(（]税込[\)）])?\s*在庫数\s*[：:]?\s*(\d+)/,
