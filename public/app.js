@@ -462,6 +462,9 @@ async function admin() {
       <div class="field"><label for="pf">收货都道府县</label><input id="pf" value="${esc(g.prefecture)}"></div>
       <button class="btn" id="saveg">保存</button>
     </section>
+    <section class="card"><h3>重置 QQ 后 4 位</h3>
+      <form class="admin-row" id="rp"><input class="wide" id="rpcn" placeholder="CN" required><input id="rppin" inputmode="numeric" maxlength="4" pattern="\\d{4}" placeholder="新的 4 位" required><button class="btn">重置</button></form>
+    </section>
     ${list.orders.map(adminOrder).join('') || '<p class="empty-state">暂无拼单</p>'}
     <section class="card"><h3>原始页面</h3>
       <div class="admin-row"><input class="wide" id="dbg" placeholder="骏和屋链接"><input id="dbgf" placeholder="关键字"><button class="btn" id="dbgb">查看</button></div>
@@ -472,6 +475,16 @@ async function admin() {
   document.getElementById('saveg').onclick = async () => {
     await A('/api/admin/group', { method: 'PUT', body: { buyer_email: document.getElementById('be').value, cc_email: document.getElementById('cc').value || null, prefecture: document.getElementById('pf').value } });
     toast('已保存');
+  };
+  document.getElementById('rp').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await A('/api/admin/members/reset-pin', { method: 'POST', body: { cn: document.getElementById('rpcn').value.trim(), pin: document.getElementById('rppin').value } });
+      toast('已重置');
+      e.target.reset();
+    } catch (err) {
+      toast(err.message);
+    }
   };
   document.getElementById('logout').onclick = () => { store.del('adminKey'); location.hash = '#/'; };
   document.getElementById('dbgb').onclick = async () => {

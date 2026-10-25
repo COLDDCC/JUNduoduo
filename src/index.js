@@ -378,9 +378,10 @@ async function api(req, env, url) {
     if (p === '/api/admin/members/reset-pin' && m === 'POST') {
       const b = await body(req);
       if (!/^\d{4}$/.test(String(b.pin))) return fail('请输入 4 位数字');
-      await env.DB.prepare('UPDATE members SET pin_hash=? WHERE group_id=? AND cn=?')
+      const r = await env.DB.prepare('UPDATE members SET pin_hash=? WHERE group_id=? AND cn=?')
         .bind(await pinHash(env, b.cn, String(b.pin)), GROUP, b.cn)
         .run();
+      if (!r.meta?.changes && !r.changes) return fail('没有这个 CN', 404);
       return json({ ok: true });
     }
 

@@ -140,6 +140,11 @@ test('团长后台：口令、改运费', async () => {
   assert.equal(r.status, 401);
   r = await call('/api/admin/shops/400486', 'PUT', { tiers: [{ min: 0, fee: 600 }, { min: 3000, fee: 0 }] }, { 'X-Admin-Key': 'admin' });
   assert.equal(r.status, 200);
+  r = await call('/api/admin/members/reset-pin', 'POST', { cn: '阿柚', pin: '1130' }, { 'X-Admin-Key': 'admin' });
+  assert.equal(r.status, 200);
+  assert.equal((await call('/api/login', 'POST', { cn: '阿柚', pin: '1130' })).status, 200);
+  r = await call('/api/admin/members/reset-pin', 'POST', { cn: '不存在', pin: '1130' }, { 'X-Admin-Key': 'admin' });
+  assert.equal(r.status, 404);
   const s = await call(`/api/scrape?url=${encodeURIComponent(LINK)}`);
   assert.deepEqual(s.data.listings[0].tiers, [{ min: 0, fee: 600 }, { min: 3000, fee: 0 }]);
 });
