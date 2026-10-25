@@ -160,3 +160,13 @@ main { padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
 .product { display: flex; gap: 12px; align-items: center; }
 .sub { justify-content: flex-start; }
 .sub-t { flex: 1; min-width: 0; color: var(--ink); text-decoration: none; font-size: 12px; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* 详情页顶部：结论 + 数字对比 */
+.hero-title { font-size: 20px; font-weight: 900; line-height: 1.35; }
+.vs { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; background: rgba(255,255,255,.12); border-radius: 12px; padding: 10px 12px; }
+.vs div { display: flex; flex-direction: column; gap: 2px; }
+.vs div:last-child { text-align: right; }
+.vs span { font-size: 12px; color: rgba(255,255,255,.8); }
+.vs b { font-size: 22px; font-weight: 900; }
+.vs i { font-style: normal; font-size: 18px; color: rgba(255,255,255,.7); }
+.tag.mine { font-size: 11px; padding: 1px 6px; vertical-align: 2px; }

@@ -51,6 +51,9 @@ export function evaluate({ items, caps, tiers }) {
     const need = m.cap > 0 ? Math.ceil((baseFee * m.qty) / m.cap - 1e-9) : Infinity;
     targetCount = Math.max(targetCount, need);
   }
+  // 大家都能接受的每件运费上限 = min(上限_i ÷ 件数_i)
+  const targetPerItem = members.length ? Math.min(...members.map((m) => m.cap / m.qty)) : null;
+  const okCount = members.filter((m) => m.ok).length;
   const needFreeYen = threshold != null ? Math.max(0, threshold - subtotal) : null;
   const overCount = members.filter((m) => !m.ok).length;
 
@@ -65,6 +68,8 @@ export function evaluate({ items, caps, tiers }) {
     reason: freeShip ? 'free' : allOk ? 'split' : null,
     needFreeYen, // 离包邮还差多少日元；null = 这家店没有包邮门槛
     overCount, // 分摊超出自己上限的人数
+    okCount,
+    targetPerItem, // 每件运费降到这个数以下，全员达标
     splitProgress: Number.isFinite(targetCount) && targetCount ? count / targetCount : 0,
   };
 }

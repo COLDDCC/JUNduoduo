@@ -22,6 +22,43 @@ async function sha256(s) {
 }
 const pinHash = (env, cn, pin) => sha256(`${env.PIN_SALT || 'junduoduo'}:${cn}:${pin}`);
 
+// ---------- 团员登录凭证：memberId.签名，存在团员自己的浏览器里 ----------
+async function hmac(env, msg) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(env.PIN_SALT || 'junduoduo'),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+const makeToken = async (env, memberId) => `${memberId}.${await hmac(env, `member:${memberId}`)}`;
+
+/** 当前访问者：团长 / 某个团员 / 路人 */
+async function getViewer(req, env) {
+  if (await isAdmin(req, env)) return { admin: true };
+  const t = req.headers.get('X-Member-Token') || '';
+  const [id, sig] = t.split('.');
+  if (id && sig && sig === (await hmac(env, `member:${id}`))) {
+    const m = await env.DB.prepare('SELECT id, cn FROM members WHERE id=?').bind(id).first();
+    if (m) return { memberId: m.id, cn: m.cn };
+  }
+  return {};
+}
+
+/**
+ * 隐私：公开只给每人的 CN、件数、金额、运费分摊；
+ * 商品名、链接、图片只给本人和团长。
+ */
+function forViewer(data, viewer) {
+  const { items, ...rest } = data;
+  if (viewer.admin) return { ...rest, items: items.map(({ member_id, ...i }) => i), me: null };
+  const mine = items.filter((i) => i.member_id === viewer.memberId).map(({ member_id, ...i }) => i);
+  return { ...rest, items: mine, me: viewer.cn || null };
+}
+
 async function getGroup(env) {
   let g = await env.DB.prepare('SELECT * FROM groups WHERE id = ?').bind(GROUP).first();
   if (!g) {
@@ -85,7 +122,7 @@ async function loadOrder(env, order, prefecture) {
     order: { ...order, shop_name: order.shop_name || shop.name },
     tiers,
     tiersSource: order.fee_override ? 'order' : shop.source,
-    items: items.map(({ member_id, ...i }) => i),
+    items,
     result,
     settle: settle(result),
   };
@@ -123,6 +160,8 @@ async function api(req, env, url) {
   const group = await getGroup(env);
   const pref = group.prefecture;
   const site = env.SITE_URL || url.origin;
+  const viewer = await getViewer(req, env);
+  const out = (data) => forViewer(data, viewer);
 
   // 贴链接：返回商品、在售店铺、每家店的运费与当前拼单进度
   if (p === '/api/scrape' && m === 'GET') {
@@ -158,14 +197,27 @@ async function api(req, env, url) {
       .bind(GROUP, now() - 3 * 24 * 3600 * 1000)
       .all();
     const list = await Promise.all(results.map((o) => loadOrder(env, o, pref)));
-    return json({ prefecture: pref, orders: list.filter((o) => o.items.length || o.order.status !== 'open') });
+    return json({
+      prefecture: pref,
+      me: viewer.cn || null,
+      orders: list.filter((o) => o.result.count || o.order.status !== 'open').map(out),
+    });
   }
 
   let mm;
   if ((mm = p.match(/^\/api\/orders\/([\w-]+)$/)) && m === 'GET') {
     const o = await env.DB.prepare('SELECT * FROM orders WHERE id=? AND group_id=?').bind(mm[1], GROUP).first();
     if (!o) return fail('找不到这个拼单', 404);
-    return json(await loadOrder(env, o, pref));
+    return json(out(await loadOrder(env, o, pref)));
+  }
+
+  // 团员“登录”：CN + QQ 后 4 位，换一个凭证，之后就能看到并撤销自己的物品
+  if (p === '/api/login' && m === 'POST') {
+    const b = await body(req);
+    const cn = String(b.cn || '').trim();
+    const member = await env.DB.prepare('SELECT * FROM members WHERE group_id=? AND cn=?').bind(GROUP, cn).first();
+    if (!member || member.pin_hash !== (await pinHash(env, cn, String(b.pin || '')))) return fail('CN 或 QQ 后 4 位不对', 403);
+    return json({ token: await makeToken(env, member.id), cn });
   }
 
   // 加入拼单
@@ -225,7 +277,8 @@ async function api(req, env, url) {
       data.mailStatus = await finalize(env, group, data, site);
       data.order.status = 'done';
     }
-    return json(data);
+    // 加入即视为本人已登录
+    return json({ ...forViewer(data, { memberId: member.id, cn }), token: await makeToken(env, member.id) });
   }
 
   // 团员撤销自己的物品（成团后不能自行撤销）
@@ -240,10 +293,11 @@ async function api(req, env, url) {
       .first();
     if (!item) return fail('找不到这件商品', 404);
     if (item.status !== 'open') return fail('已成团，撤销请联系团长', 409);
-    if (item.pin_hash !== (await pinHash(env, item.cn, String(b.pin || '')))) return fail('PIN 不对', 403);
+    const isOwner = viewer.memberId === item.member_id;
+    if (!isOwner && item.pin_hash !== (await pinHash(env, item.cn, String(b.pin || '')))) return fail('只能撤销自己的物品', 403);
     await env.DB.prepare("UPDATE items SET removed_at=?, removed_by='self' WHERE id=?").bind(now(), item.id).run();
     const o = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(item.order_id).first();
-    return json(await loadOrder(env, o, pref));
+    return json(forViewer(await loadOrder(env, o, pref), { memberId: item.member_id, cn: item.cn }));
   }
 
   // ---------- 团长后台 ----------

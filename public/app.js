@@ -33,7 +33,12 @@ function toast(msg, ms = 2600) {
 async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(store.get('token') ? { 'X-Member-Token': store.get('token') } : {}),
+      ...(store.get('adminKey') ? { 'X-Admin-Key': store.get('adminKey') } : {}),
+      ...(opts.headers || {}),
+    },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -154,15 +159,12 @@ function whoLine(r) {
 function shopCard(d) {
   const r = d.result;
   const v = progressView(r);
-  const imgs = [...new Map(d.items.map((i) => [i.product_id, i.image])).values()];
-  return `<a class="card link shop" href="#/order/${d.order.id}">
-    <div class="shop-img">${thumb(imgs[0], 'lg')}${imgs.length > 1 ? `<span class="more">+${imgs.length - 1}</span>` : ''}</div>
-    <div class="shop-body">
-      <div class="card-head"><h3>${esc(d.order.shop_name)}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
-      <div class="bar sm"><i style="width:${v.pct}%"></i></div>
-      <div class="who">${whoLine(r)}</div>
-      <div class="meta"><span>合计 ${jpy(r.subtotal)}</span><span class="muted">${v.right}</span></div>
-    </div></a>`;
+  const iAmIn = d.me && r.members.some((m) => m.member === d.me);
+  return `<a class="card link" href="#/order/${d.order.id}">
+    <div class="card-head"><h3>${esc(d.order.shop_name)}${iAmIn ? ' <span class="tag mine">我在拼</span>' : ''}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
+    <div class="bar sm"><i style="width:${v.pct}%"></i></div>
+    <div class="who">${whoLine(r)}</div>
+    <div class="meta"><span>合计 ${jpy(r.subtotal)}</span><span class="muted">${v.right}</span></div></a>`;
 }
 
 // ---------- 贴链接 → 选分店 ----------
@@ -226,6 +228,7 @@ async function pick(url) {
           body: { url: l.url, shopId: l.shopId, branch: l.branch, cn: me.cn, pin, qty: me.qty, cap: me.cap },
         });
         store.set('cn', me.cn);
+        if (res.token) store.set('token', res.token);
         store.set('cap', String(me.cap));
         toast(res.order.status === 'done' ? '已成团！邮件已发给代购' : '加入成功');
         location.hash = `#/order/${res.order.id}`;
@@ -280,57 +283,112 @@ async function order(id) {
   timer = setInterval(load, 10000);
 }
 
+/** 详情页顶部：一句结论 + 两个数字对比 + 进度条 + 达标人数 */
+function heroBlock(r, tiers) {
+  const v = progressView(r);
+  let title, a, b, foot;
+  if (r.success) {
+    title = '条件已满足，正在成团…';
+    a = ['已拼', jpy(r.subtotal)];
+    b = ['运费', r.fee ? `${jpy(r.perItem)}/件` : '包邮'];
+  } else if (r.needFreeYen != null) {
+    title = `还差 ${jpy(r.needFreeYen)} 包邮`;
+    a = ['已拼', jpy(r.subtotal)];
+    b = ['包邮线', jpy(r.threshold)];
+  } else {
+    const t = r.targetPerItem;
+    title = t > 0 ? `每件运费降到 ${jpy(Math.floor(t))} 以下就成团` : '有人只接受包邮，这家店不包邮';
+    a = ['现在每件运费', jpy(r.perItem)];
+    b = ['大家能接受', t > 0 ? `≤ ${jpy(Math.floor(t))}` : '—'];
+  }
+  foot = `${r.members.length} 人 · ${r.count} 件 · ${r.okCount}/${r.members.length} 人运费在上限内`;
+  return `
+    <div class="hero-title">${title}</div>
+    <div class="vs">
+      <div><span>${a[0]}</span><b>${a[1]}</b></div>
+      <i aria-hidden="true">→</i>
+      <div><span>${b[0]}</span><b>${b[1]}</b></div>
+    </div>
+    <div class="bar" style="background:rgba(255,255,255,.28)"><i style="width:${v.pct}%;background:#fff"></i></div>
+    <div class="hero-meta"><span>${foot}</span><span>${describeTiers(tiers)}</span></div>`;
+}
+
 function renderOpen(d) {
   const r = d.result;
   const v = progressView(r);
-  const headline = v.headline;
-  const mine = store.get('cn');
+  const me = d.me;
   $app.innerHTML = `
   <header class="hero">
     <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>${esc(d.order.shop_name)}</h1></div>
-    <div class="big">${headline}</div>
-    <div class="bar" style="background:rgba(255,255,255,.32)"><i style="width:${v.pct}%;background:#fff"></i></div>
-    <div class="hero-meta"><span>${r.members.length} 人 · ${r.count} 件 · 已拼 ${jpy(r.subtotal)}${r.threshold && !r.success ? ` / ${jpy(r.threshold)}` : ''}</span><span>${describeTiers(d.tiers)}</span></div>
-    ${v.sub ? `<div style="font-size:13px">${v.sub}</div>` : ''}
+    ${heroBlock(r, d.tiers)}
   </header>
   <main>
     <section class="list">
+      <div class="list-head"><span>谁在拼</span><span>分摊运费 / 上限</span></div>
       ${r.members
         .map(
-          (m) => `<div class="li"><div class="mid"><b>${esc(m.member)}${m.member === mine ? '（我）' : ''}</b></div>
-          <div class="end"><b>运费 ${jpy(m.share)}</b>${m.ok ? `<span class="good">上限 ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>
-          ${d.items
-            .filter((i) => i.cn === m.member)
-            .map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a><button class="mini" data-rm="${i.id}" data-cn="${esc(i.cn)}">撤销</button></div>`)
-            .join('')}`,
+          (m) => `<div class="li"><div class="mid"><b>${esc(m.member)}${m.member === me ? '（我）' : ''}</b><span>${m.qty} 件 · ${jpy(m.goods)}</span></div>
+          <div class="end"><b>${jpy(m.share)}</b>${m.ok ? `<span class="good">≤ ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>`,
         )
         .join('')}
     </section>
+    ${
+      d.items.length
+        ? `<section class="list"><div class="list-head"><span>${me ? '我的物品（仅自己和团长可见）' : '全部物品（团长视图）'}</span><span></span></div>
+          ${d.items.map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${me ? '' : `${esc(i.cn)} · `}${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a><button class="mini" data-rm="${i.id}">撤销</button></div>`).join('')}</section>`
+        : `<button class="btn line block" id="login">查看 / 撤销我的物品</button>`
+    }
+    <p class="muted" style="margin:0;text-align:center">每个人买了什么只有本人和团长看得到</p>
     <button class="btn block" id="share">复制链接发到群里</button>
   </main>`;
-  $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm, b.dataset.cn, d)));
+  $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
+  document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
     const txt = `【骏和屋拼单】${d.order.shop_name}：${r.members.length} 人 ${r.count} 件，${v.tag}！来拼 → ${location.origin}/#/order/${d.order.id}`;
     navigator.clipboard?.writeText(txt).then(() => toast('已复制，去群里粘贴吧'), () => toast(txt, 6000));
   };
 }
 
-function askRemove(itemId, cn, d) {
-  $sheet.innerHTML = `<form class="sheet" id="rmf">
-    <h2>确认撤销「${esc(cn)}」的这件商品？</h2>
-    <p>撤销后其余人的运费会重新计算。</p>
-    <label for="rmpin" class="muted">输入 ${esc(cn)} 的 PIN（QQ 号后 4 位）</label>
-    <input id="rmpin" class="pin-input" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required autocomplete="off">
-    <div class="grid2"><button type="button" class="btn line" id="rmcancel">取消</button><button class="btn dark">确认撤销</button></div>
-  </form>`;
+function openSheet(html) {
+  $sheet.innerHTML = html;
   $sheet.hidden = false;
-  document.getElementById('rmpin').focus();
-  document.getElementById('rmcancel').onclick = () => ($sheet.hidden = true);
   $sheet.onclick = (e) => { if (e.target === $sheet) $sheet.hidden = true; };
-  document.getElementById('rmf').onsubmit = async (e) => {
+  $sheet.querySelector('[data-close]')?.addEventListener('click', () => ($sheet.hidden = true));
+}
+
+function askLogin() {
+  openSheet(`<form class="sheet" id="lgf">
+    <h2>查看我的物品</h2>
+    <p>输入加入时填的 CN 和 QQ 号后 4 位。</p>
+    <div class="grid2">
+      <div class="field"><label for="lcn">CN</label><input id="lcn" required value="${esc(store.get('cn') || '')}"></div>
+      <div class="field"><label for="lpin">QQ 号后 4 位</label><input id="lpin" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required></div>
+    </div>
+    <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn">确认</button></div>
+  </form>`);
+  document.getElementById('lgf').onsubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await api(`/api/items/${itemId}/remove`, { method: 'POST', body: { pin: document.getElementById('rmpin').value } });
+      const res = await api('/api/login', { method: 'POST', body: { cn: document.getElementById('lcn').value.trim(), pin: document.getElementById('lpin').value } });
+      store.set('token', res.token);
+      store.set('cn', res.cn);
+      $sheet.hidden = true;
+      route();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+
+function askRemove(itemId) {
+  openSheet(`<div class="sheet">
+    <h2>确认撤销这件物品？</h2>
+    <p>撤销后其余人的运费会重新计算。</p>
+    <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn dark" id="rmok">确认撤销</button></div>
+  </div>`);
+  document.getElementById('rmok').onclick = async () => {
+    try {
+      const res = await api(`/api/items/${itemId}/remove`, { method: 'POST', body: {} });
       $sheet.hidden = true;
       toast('已撤销');
       res.result.count ? renderOpen(res) : (location.hash = '#/');
@@ -358,8 +416,10 @@ function renderDone(d) {
       <div class="total"><span style="font-weight:700">总计</span><b>${jpy(s.sum)}</b></div>
       ${s.rounding ? `<p class="muted" style="margin:0 0 10px">四舍五入差额 ${jpy(s.rounding)}</p>` : ''}
     </section>
-    <div class="grid2"><button class="btn line" id="copy">复制链接清单</button><button class="btn line" id="csv">导出表格</button></div>
+    ${d.items.length ? `<section class="list"><div class="list-head"><span>${d.me ? '我的物品' : '全部物品'}</span><span></span></div>${d.items.map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${d.me ? '' : `${esc(i.cn)} · `}${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a></div>`).join('')}</section>` : ''}
+    ${store.get('adminKey') ? `<div class="grid2"><button class="btn line" id="copy">复制链接清单</button><button class="btn line" id="csv">导出表格</button></div>` : ''}
   </main>`;
+  if (!store.get('adminKey')) return;
   document.getElementById('copy').onclick = () => {
     const txt = d.items.map((i) => `${i.cn}\t${i.url}\t${jpy(i.price)} × ${i.qty}`).join('\n');
     navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast('复制失败，请手动选择'));

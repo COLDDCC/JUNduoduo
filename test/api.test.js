@@ -96,9 +96,44 @@ test('完整流程：加入、PIN 校验、撤销、成团发邮件', async () =
   assert.equal(list.data.orders[0].order.status, 'done');
 
   // 成团后不能自己撤销
-  const any = list.data.orders[0].items[0].id;
+  // 路人看不到任何物品，团长能看到全部
+  assert.equal(list.data.orders[0].items.length, 0);
+  const adminList = await call('/api/orders', 'GET', null, { 'X-Admin-Key': 'admin' });
+  assert.equal(adminList.data.orders[0].items.length, 4);
+  const any = adminList.data.orders[0].items[0].id;
   r = await call(`/api/items/${any}/remove`, 'POST', { pin: '1234' });
   assert.equal(r.status, 409);
+});
+
+test('隐私：只有本人看得到自己的物品', async () => {
+  const L2 = 'https://www.suruga-ya.jp/product/detail/120158641?tenpo_cd=201206&branch_number=9401';
+  const a = await call('/api/join', 'POST', { url: L2, shopId: '201206', branch: '9401', cn: '甲', pin: '1111', cap: 0, qty: 1 });
+  const b = await call('/api/join', 'POST', { url: L2, shopId: '201206', branch: '9401', cn: '乙', pin: '2222', cap: 0, qty: 1 });
+  assert.equal(b.data.items.length, 1, '加入后只返回自己的物品');
+  assert.equal(b.data.items[0].cn, '乙');
+  assert.equal(b.data.result.members.length, 2, '但能看到谁在拼、件数和金额');
+  assert.ok(!JSON.stringify(b.data.result).includes('tenpo_cd'), '公开数据里没有商品链接');
+
+  const id = a.data.order.id;
+  const anon = await call(`/api/orders/${id}`);
+  assert.equal(anon.data.items.length, 0);
+  const asA = await call(`/api/orders/${id}`, 'GET', null, { 'X-Member-Token': a.data.token });
+  assert.deepEqual(asA.data.items.map((i) => i.cn), ['甲']);
+  assert.equal(asA.data.me, '甲');
+
+  const fake = await call(`/api/orders/${id}`, 'GET', null, { 'X-Member-Token': `${a.data.token.split('.')[0]}.0000` });
+  assert.equal(fake.data.items.length, 0, '伪造凭证无效');
+
+  // 乙不能撤销甲的物品
+  const itemA = asA.data.items[0].id;
+  let r = await call(`/api/items/${itemA}/remove`, 'POST', {}, { 'X-Member-Token': b.data.token });
+  assert.equal(r.status, 403);
+  r = await call(`/api/items/${itemA}/remove`, 'POST', {}, { 'X-Member-Token': a.data.token });
+  assert.equal(r.status, 200);
+
+  const login = await call('/api/login', 'POST', { cn: '乙', pin: '2222' });
+  assert.equal(login.status, 200);
+  assert.equal((await call('/api/login', 'POST', { cn: '乙', pin: '9999' })).status, 403);
 });
 
 test('团长后台：口令、改运费', async () => {
