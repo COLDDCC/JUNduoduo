@@ -216,7 +216,10 @@ async function pick(url) {
   }
   const L = data.listings.filter((l) => l.price != null);
   if (!L.length) {
-    $main.innerHTML = '<p class="lite-empty">暂无在售</p>';
+    const message = data.listings.length
+      ? '已找到商品和店铺，但未能读取价格。请打开原商品链接核对。'
+      : '暂无可识别的在售店铺，请打开原商品链接确认库存。';
+    $main.innerHTML = `<div class="product">${thumb(data.image, 'lg')}<div class="product-title">${esc(data.title || '骏河屋商品')}</div></div><p class="lite-empty">${esc(message)}</p><p><a href="${esc(url)}" target="_blank" rel="noopener noreferrer">打开骏河屋原页面 ↗</a></p>`;
     return;
   }
   const hint = data.hint || {};
