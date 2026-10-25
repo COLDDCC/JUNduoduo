@@ -134,3 +134,12 @@ test('海外站链接也能认出商品编号', () => {
   assert.equal(parseProductId('https://www.suruga-ya.com/zh-hant/product/ZHORE185731'), 'ZHORE185731');
   assert.equal(parseProductId('https://www.suruga-ya.com/zh-hans/search?keyword=x'), null);
 });
+
+test('骏河屋真实展示的 650円 (税込) 在庫数：1 可提取价格', () => {
+  const html = '<h1>Honey Trap</h1><div><span>中古</span> <b>650円</b> (税込) <span>在庫数：1</span></div>';
+  assert.deepEqual(parseDetailSale(html), { price: 650, condition: '中古' });
+});
+test('售价与库存分离、库存为零不返回假价格', () => {
+  assert.equal(parseDetailSale('<div>中古 <span>650円</span> (税込) 在庫数：0</div>').price, null);
+  assert.equal(parseDetailSale('<div>中古 <span>650円</span> (税込) 在庫数：1</div>').price, 650);
+});
