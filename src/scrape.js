@@ -64,17 +64,22 @@ const yen = (s) => {
 export function parseOtherPage(html, productId) {
   const title = parseTitle(html);
   const linkRe = new RegExp(
-    `/product/detail/${productId}\\?(?:tenpo_cd=(\\d+)&(?:amp;)?)?branch_number=(\\d+)`,
+    `/product/detail/${productId}\\?((?:(?:amp;)?(?:tenpo_cd|branch_number)=\\d+(?:&(?:amp;)?)?)+)`,
     'g',
   );
   const hits = [];
   let m;
-  while ((m = linkRe.exec(html))) hits.push({ idx: m.index, tenpo: m[1] || null, branch: m[2] });
+  while ((m = linkRe.exec(html))) {
+    const query = m[1].replace(/&amp;/g, '&');
+    const tenpo = query.match(/(?:^|&)tenpo_cd=(\\d+)/)?.[1] || null;
+    const branch = query.match(/(?:^|&)branch_number=(\\d+)/)?.[1] || null;
+    hits.push({ idx: m.index, tenpo, branch });
+  }
 
   const seen = new Map();
   for (let i = 0; i < hits.length; i++) {
     const h = hits[i];
-    const key = `${h.tenpo || HONTEN_ID}:${h.branch}`;
+    const key = `${h.tenpo || HONTEN_ID}:${h.branch || ''}`;
     if (seen.has(key)) continue;
     // 这条出品的 HTML 片段：从上一条链接结束到下一条链接开始
     const start = i > 0 ? hits[i - 1].idx : Math.max(0, h.idx - 3000);
@@ -102,7 +107,7 @@ export function parseOtherPage(html, productId) {
       branch: h.branch,
       price,
       condition: cond ? decode(cond) : null,
-      url: `${BASE}/product/detail/${productId}?${h.tenpo ? `tenpo_cd=${h.tenpo}&` : ''}branch_number=${h.branch}`,
+      url: `${BASE}/product/detail/${productId}?${[h.tenpo && `tenpo_cd=${h.tenpo}`, h.branch && `branch_number=${h.branch}`].filter(Boolean).join('&')}`,
     });
   }
   const listings = [...seen.values()].sort((a, b) => (a.price ?? 9e9) - (b.price ?? 9e9));
