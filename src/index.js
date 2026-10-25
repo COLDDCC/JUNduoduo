@@ -61,6 +61,8 @@ function forViewer(data, viewer) {
   return { ...rest, items: mine, me: viewer.cn || null };
 }
 
+const MIGRATIONS = ['ALTER TABLE orders ADD COLUMN order_no TEXT', 'ALTER TABLE orders ADD COLUMN ordered_at INTEGER'];
+
 /** 首次访问时自动建表（CREATE TABLE IF NOT EXISTS，可重复执行） */
 let schemaReady = null;
 function ensureSchema(env) {
@@ -69,10 +71,15 @@ function ensureSchema(env) {
       .split(';')
       .map((x) => x.trim())
       .filter(Boolean);
-    schemaReady = env.DB.batch(stmts.map((x) => env.DB.prepare(x))).catch((e) => {
-      schemaReady = null;
-      throw e;
-    });
+    schemaReady = env.DB.batch(stmts.map((x) => env.DB.prepare(x)))
+      .then(async () => {
+        // 旧库补字段（已存在会报错，忽略）
+        for (const sql of MIGRATIONS) await env.DB.prepare(sql).run().catch(() => {});
+      })
+      .catch((e) => {
+        schemaReady = null;
+        throw e;
+      });
   }
   return schemaReady;
 }
@@ -210,7 +217,7 @@ async function api(req, env, url) {
   // 首页：正在拼 + 最近成团
   if (p === '/api/orders' && m === 'GET') {
     const { results } = await env.DB.prepare(
-      `SELECT * FROM orders WHERE group_id=? AND (status='open' OR (status='done' AND done_at > ?))
+      `SELECT * FROM orders WHERE group_id=? AND (status='open' OR (status IN ('done','ordered') AND done_at > ?))
        ORDER BY status='open' DESC, created_at DESC`,
     )
       .bind(GROUP, now() - 3 * 24 * 3600 * 1000)
@@ -350,6 +357,21 @@ async function api(req, env, url) {
           .run();
       }
       return json({ ok: true });
+    }
+
+    // 填单号：已成团 → 已下单（可重复填写以修改单号）
+    if ((mm = p.match(/^\/api\/admin\/orders\/([\w-]+)\/ordered$/)) && m === 'POST') {
+      const b = await body(req);
+      const no = String(b.orderNo || '').trim().slice(0, 64);
+      if (!no) return fail('请填写单号');
+      const o = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(mm[1]).first();
+      if (!o) return fail('找不到这个拼单', 404);
+      if (!['done', 'ordered'].includes(o.status)) return fail('还没成团', 409);
+      await env.DB.prepare("UPDATE orders SET status='ordered', order_no=?, ordered_at=COALESCE(ordered_at, ?) WHERE id=?")
+        .bind(no, now(), o.id)
+        .run();
+      const fresh = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(o.id).first();
+      return json(out(await loadOrder(env, fresh, pref)));
     }
 
     // 拼单操作：close 关团 / done 手动成团 / reopen 重新打开 / resend 重发邮件 / fee 本团单独运费

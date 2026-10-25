@@ -269,3 +269,4 @@ button.pill.opt { flex-direction: row; align-items: center; justify-content: spa
 button.pill.opt .pill-l small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .loading { text-align: left; padding: 20px 4px; }
 .toast { top: calc(16px + env(safe-area-inset-top)); bottom: auto; }
+.pill.done.ordered .pill-r { color: #8A8D99; }

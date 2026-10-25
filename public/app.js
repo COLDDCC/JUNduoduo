@@ -137,7 +137,7 @@ async function home() {
 
 function renderHome(orders) {
   const open = orders.filter((o) => o.order.status === 'open');
-  const done = orders.filter((o) => o.order.status === 'done');
+  const done = orders.filter((o) => ['done', 'ordered'].includes(o.order.status));
   const $list = document.getElementById('list');
   if (!$list) return;
   // 最接近成团的那家高亮
@@ -155,11 +155,12 @@ function shopPill(d, lead, done) {
   const v = progressView(r);
   const iAmIn = d.me && r.members.some((m) => m.member === d.me);
   let unit, num;
-  if (done || r.success) [unit, num] = ['', '成团'];
+  if (d.order.status === 'ordered') [unit, num] = ['', '已下单'];
+  else if (done || r.success) [unit, num] = ['', '成团'];
   else if (r.needFreeYen != null) [unit, num] = ['差', jpy(r.needFreeYen)];
   else [unit, num] = ['每件', jpy(r.perItem)];
   const w = done ? 100 : Math.round(74 + 0.26 * v.pct);
-  return `<a class="pill${lead ? ' lead' : ''}${done ? ' done' : ''}" href="#/order/${d.order.id}" style="width:${w}%">
+  return `<a class="pill${lead ? ' lead' : ''}${done ? ' done' : ''}${d.order.status === 'ordered' ? ' ordered' : ''}" href="#/order/${d.order.id}" style="width:${w}%">
     <span class="pill-l"><b>${esc(d.order.shop_name)}</b><small>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)}${iAmIn ? ' · 我' : ''}</small></span>
     <span class="pill-r">${unit ? `<small>${unit}</small>` : ''}<span>${num}</span></span></a>`;
 }
@@ -395,19 +396,31 @@ function renderDone(d) {
   const r = d.result;
   const s = d.settle;
   const closed = d.order.status === 'closed';
+  const ordered = d.order.status === 'ordered';
   const when = d.order.done_at ? new Date(d.order.done_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
   const mailOk = d.order.mail_status === 'sent';
   $app.innerHTML = `
   ${subHead(d.order.shop_name)}
   <main class="lite-main">
-    <section class="stat ${closed ? 'muted' : 'ok'}"><small>${closed ? '已关闭' : `已成团 · ${when}`}</small><b>${jpy(s.sum)}</b><span>${r.fee ? `运费 ${jpy(r.fee)} · 每件 ${jpy(r.perItem)}` : '包邮'}${closed || mailOk ? '' : ' · 邮件未发出'}</span></section>
+    <section class="stat ${closed ? 'muted' : 'ok'}"><small>${closed ? '已关闭' : ordered ? `已下单 · 单号 ${esc(d.order.order_no)}` : `已成团 · ${when}`}</small><b>${jpy(s.sum)}</b><span>${r.fee ? `运费 ${jpy(r.fee)} · 每件 ${jpy(r.perItem)}` : '包邮'}${closed || mailOk ? '' : ' · 邮件未发出'}</span></section>
     <div class="rows">
       ${s.rows.map((x) => `<div class="row"><span class="row-l"><b>${esc(x.member)}${x.member === d.me ? ' · 我' : ''}</b><small>${x.qty}件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</small></span><span class="row-r"><span>${jpy(x.total)}</span></span></div>`).join('')}
     </div>
     ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, false)}</div>` : ''}
-    ${store.get('adminKey') ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="csv">导出</button></div>` : ''}
+    ${d.admin && !closed ? `<form class="lite-form" id="ono"><label class="lf"><span>单号</span><input id="onoin" required maxlength="64" value="${esc(d.order.order_no || '')}"></label><button class="btn block">${ordered ? '更新单号' : '已下单'}</button></form>` : ''}
+    ${d.admin ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="csv">导出</button></div>` : ''}
   </main>`;
-  if (!store.get('adminKey')) return;
+  document.getElementById('ono')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api(`/api/admin/orders/${d.order.id}/ordered`, { method: 'POST', body: { orderNo: document.getElementById('onoin').value } });
+      toast('已下单');
+      renderDone(res);
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  if (!d.admin) return;
   document.getElementById('copy').onclick = () => {
     const txt = d.items.map((i) => `${i.cn}\t${i.url}\t${jpy(i.price)} × ${i.qty}`).join('\n');
     navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast('复制失败'));
@@ -515,7 +528,7 @@ function adminOrder(d) {
   const fee0 = d.tiers?.[0]?.fee ?? '';
   const free = freeThreshold(d.tiers) ?? '';
   return `<section class="card">
-    <div class="card-head"><div><h3>${esc(o.shop_name)}</h3><span class="muted">店铺 ID ${esc(o.shop_id)} · ${o.status === 'open' ? '拼单中' : o.status === 'done' ? '已成团' : '已关闭'} · 运费来源：${{ auto: '自动抓取', manual: '手动', order: '本团单独', none: '未读到' }[d.tiersSource] || d.tiersSource}</span></div>
+    <div class="card-head"><div><h3>${esc(o.shop_name)}</h3><span class="muted">店铺 ID ${esc(o.shop_id)} · ${{ open: '拼单中', done: '已成团', ordered: `已下单 ${esc(o.order_no || '')}`, closed: '已关闭' }[o.status] || o.status} · 运费来源：${{ auto: '自动抓取', manual: '手动', order: '本团单独', none: '未读到' }[d.tiersSource] || d.tiersSource}</span></div>
       <span class="tag ${r.success ? 'ok' : ''}">${r.count} 件 · ${jpy(r.subtotal)}</span></div>
     <div class="admin-row"><span class="muted">运费</span><input id="fee-${o.id}" type="number" value="${fee0}"><span class="muted">满</span><input id="free-${o.id}" type="number" placeholder="—" value="${free}"><span class="muted">包邮</span>
       <button class="mini" data-act="tiers" data-id="${o.id}" data-shop="${esc(o.shop_id)}">保存为该店运费</button>

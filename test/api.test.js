@@ -102,6 +102,17 @@ test('完整流程：加入、PIN 校验、撤销、成团发邮件', async () =
   const any = adminList.data.orders[0].items[0].id;
   r = await call(`/api/items/${any}/remove`, 'POST', { pin: '1234' });
   assert.equal(r.status, 409);
+
+  // 团长填单号 → 已下单
+  const oid = adminList.data.orders[0].order.id;
+  let o2 = await call(`/api/admin/orders/${oid}/ordered`, 'POST', { orderNo: 'SR-20261025-001' }, { 'X-Admin-Key': 'admin' });
+  assert.equal(o2.status, 200);
+  assert.equal(o2.data.order.status, 'ordered');
+  assert.equal(o2.data.order.order_no, 'SR-20261025-001');
+  o2 = await call(`/api/admin/orders/${oid}/ordered`, 'POST', { orderNo: '' }, { 'X-Admin-Key': 'admin' });
+  assert.equal(o2.status, 400);
+  assert.equal((await call(`/api/admin/orders/${oid}/ordered`, 'POST', { orderNo: 'x' })).status, 401);
+
 });
 
 test('隐私：只有本人看得到自己的物品', async () => {

@@ -39,11 +39,13 @@ CREATE TABLE IF NOT EXISTS orders (
   group_id    TEXT NOT NULL REFERENCES groups(id),
   shop_id     TEXT NOT NULL,
   shop_name   TEXT,
-  status      TEXT NOT NULL DEFAULT 'open',   -- open / done / closed
+  status      TEXT NOT NULL DEFAULT 'open',   -- open 拼单中 / done 已成团 / ordered 已下单 / closed 已关闭
   fee_override TEXT,                          -- 本团单独调整的运费分档（JSON），可空
   done_at     INTEGER,
   mail_status TEXT,                           -- sent / failed:原因
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  order_no    TEXT,                           -- 团长下单后填的单号
+  ordered_at  INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_orders_open ON orders(group_id, shop_id, status);
 
