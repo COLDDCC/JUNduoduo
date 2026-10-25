@@ -8,20 +8,41 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - name: 运行测试
         run: npm test
-      - name: 部署（未配置 Cloudflare 密钥时跳过）
+
+      - name: 准备数据库（没有就自动创建）
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        run: |
+          ID=$(npx --yes wrangler@3 d1 list --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const l=JSON.parse(s);const d=l.find(x=>x.name==='junduoduo');process.stdout.write(d?d.uuid:'')})")
+          if [ -z "$ID" ]; then
+            npx --yes wrangler@3 d1 create junduoduo
+            ID=$(npx --yes wrangler@3 d1 list --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const l=JSON.parse(s);process.stdout.write(l.find(x=>x.name==='junduoduo').uuid)})")
+          fi
+          sed -i "s/REPLACE_WITH_YOUR_D1_ID/$ID/" wrangler.toml
+          npx --yes wrangler@3 d1 execute junduoduo --remote --file=schema.sql
+
+      - name: 部署
+        if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
+        run: npx --yes wrangler@3 deploy
+
+      - name: 写入密钥
         if: ${{ env.CLOUDFLARE_API_TOKEN != '' }}
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          PIN_SALT: ${{ secrets.PIN_SALT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
-          npx --yes wrangler@3 d1 execute junduoduo --remote --file=schema.sql
-          npx --yes wrangler@3 deploy
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          for k in ADMIN_KEY PIN_SALT RESEND_API_KEY; do
+            v="${!k}"
+            if [ -n "$v" ]; then printf '%s' "$v" | npx --yes wrangler@3 secret put "$k"; fi
+          done

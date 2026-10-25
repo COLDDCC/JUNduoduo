@@ -52,19 +52,19 @@ schema.sql     数据库结构
 test/          测试（node --test，无需安装依赖）
 ```
 
-## 部署（第一次，约 20 分钟）
+## 部署
 
-1. **建数据库**：Cloudflare 后台 → Storage & Databases → D1 → Create，名字填 `junduoduo`。复制 Database ID，填进 `wrangler.toml` 的 `database_id`。
-2. **给 GitHub 部署权限**：Cloudflare → My Profile → API Tokens → Create Token，用“Edit Cloudflare Workers”模板，再加上 D1 Edit 权限。在本仓库 Settings → Secrets and variables → Actions 添加：
-   - `CLOUDFLARE_API_TOKEN`：刚建的 Token
-   - `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 后台右侧的 Account ID
-3. **推送到 main**：GitHub Actions 会自动跑测试、建表、部署。之后每次改代码推送都会自动部署。
-4. **设置密钥**：Cloudflare → Workers → junduoduo → Settings → Variables and Secrets，添加（类型选 Secret）：
-   - `ADMIN_KEY`：团长后台口令
-   - `PIN_SALT`：任意一串随机字符，设好后不要改（改了所有 PIN 会失效）
-   - `RESEND_API_KEY`：见下一步
-5. **邮件**：注册 [Resend](https://resend.com)，在 Domains 里添加你的域名并按提示加 DNS 记录，创建 API Key。把 `wrangler.toml` 里的 `MAIL_FROM` 改成 `骏和屋拼单 <pin@你的域名>`。未验证域名时只能发给 Resend 注册邮箱本人。
-6. **绑定域名（可选）**：Workers → junduoduo → Settings → Domains & Routes → 添加 `pin.你的域名`，并把 `SITE_URL` 设成这个地址。
+全部在 GitHub 仓库的 Settings → Secrets and variables → Actions 里填，推送到 main 后自动测试、建库、部署。
+
+| Secret | 说明 |
+| --- | --- |
+| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → “Edit Cloudflare Workers” 模板，权限里再加 Account · D1 · Edit |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 后台 Workers 页面右侧的 Account ID |
+| `ADMIN_KEY` | 团长后台口令 |
+| `PIN_SALT` | 任意随机字符串，设好后不要改 |
+| `RESEND_API_KEY` | 可选，Resend 的 API Key；不填则成团时不发邮件 |
+
+填完后到 Actions → 测试并部署 → Run workflow。网址为 `https://junduoduo.<你的子域名>.workers.dev`，团长后台为网址后加 `/#/admin`。
 
 ## 使用
 

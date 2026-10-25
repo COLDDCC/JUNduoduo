@@ -59,7 +59,7 @@ function progressView(r) {
   const people = `${r.members.length} 人 · ${r.count} 件`;
   const perItem = r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮';
   if (r.success) {
-    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: perItem, headline: '<span>条件已满足，正在成团…</span>' };
+    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: perItem, headline: '<span>已成团</span>' };
   }
   const over = r.overCount ? `${r.overCount} 人超出运费上限` : '';
   if (r.needFreeYen != null) {
@@ -69,7 +69,7 @@ function progressView(r) {
       left: `${people} · 已拼 <b>${jpy(r.subtotal)}</b>`,
       right: `满 ${jpy(r.threshold)} 包邮`,
       headline: `<span>还差</span><b>${jpy(r.needFreeYen).slice(1)}</b><span>日元包邮</span>`,
-      sub: over ? `不包邮的话${perItem}，${over}` : '',
+      sub: '',
     };
   }
   return {
@@ -78,7 +78,7 @@ function progressView(r) {
     left: `${people} · ${jpy(r.subtotal)}`,
     right: perItem,
     headline: `<span>现在</span><b>${jpy(r.perItem).slice(1)}</b><span>日元/件 运费</span>`,
-    sub: over ? `${over}，人越多每件越便宜` : '',
+    sub: '',
   };
 }
 
@@ -140,7 +140,7 @@ function renderHome(orders) {
   if (!$list) return;
   $list.innerHTML = `
     <div class="sec-title"><h2>正在拼的分店 · ${open.length}</h2></div>
-    ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">还没有人开团，在上面粘贴链接开第一个吧。</p>'}
+    ${open.length ? open.map(shopCard).join('') : '<p class="empty-state">暂无拼单</p>'}
     ${done.length ? `<div class="sec-title" style="margin-top:8px"><h2 style="font-size:15px;color:var(--quiet)">已成团</h2></div>` : ''}
     ${done
       .map(
@@ -173,18 +173,18 @@ async function pick(url) {
   <header class="hero" style="background:#fff;color:var(--ink);padding:10px 16px;border-bottom:1px solid #EDE6E0">
     <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>选一家店加入</h1></div>
   </header>
-  <main style="margin-top:0"><p class="loading">正在读取骏和屋，第一次可能要几秒…</p></main>`;
+  <main style="margin-top:0"><p class="loading">读取中…</p></main>`;
   const $main = $app.querySelector('main');
   let data;
   try {
     data = await api(`/api/scrape?url=${encodeURIComponent(url || '')}`);
   } catch (e) {
-    $main.innerHTML = `<p class="empty-state">${esc(e.message)}</p><a class="btn block" href="#/">返回重新贴</a>`;
+    $main.innerHTML = `<p class="empty-state">${esc(e.message)}</p><a class="btn block" href="#/">返回</a>`;
     return;
   }
   const L = data.listings.filter((l) => l.price != null);
   if (!L.length) {
-    $main.innerHTML = '<p class="empty-state">这件商品现在没有店铺在卖。</p><a class="btn block" href="#/">返回</a>';
+    $main.innerHTML = '<p class="empty-state">暂无在售</p><a class="btn block" href="#/">返回</a>';
     return;
   }
   const hint = data.hint || {};
@@ -220,7 +220,7 @@ async function pick(url) {
       const pin = document.getElementById('pin').value.trim();
       const btn = document.getElementById('submit');
       btn.disabled = true;
-      btn.textContent = '提交中…';
+      btn.textContent = '提交中';
       try {
         const l = L[sel];
         const res = await api('/api/join', {
@@ -230,7 +230,7 @@ async function pick(url) {
         store.set('cn', me.cn);
         if (res.token) store.set('token', res.token);
         store.set('cap', String(me.cap));
-        toast(res.order.status === 'done' ? '已成团！邮件已发给代购' : '加入成功');
+        toast(res.order.status === 'done' ? '已成团' : '加入成功');
         location.hash = `#/order/${res.order.id}`;
       } catch (err) {
         toast(err.message, 4000);
@@ -252,7 +252,7 @@ function optCard(l, selected, me, idx) {
   items.push({ member: self, price: l.price, qty: me.qty });
   caps[self] = me.cap;
   const after = tiers ? evaluate({ items, caps, tiers }) : null;
-  let preview = '运费未读到，加入后由团长确认';
+  let preview = '运费待确认';
   if (after) {
     const mine = after.members.find((m) => m.member === self);
     if (after.success) preview = after.reason === 'free' ? `你加入后：${jpy(after.subtotal)} · 直接包邮成团` : `你加入后：每件运费 ${jpy(after.perItem)} · 直接成团`;
@@ -288,7 +288,7 @@ function heroBlock(r, tiers) {
   const v = progressView(r);
   let title, a, b, foot;
   if (r.success) {
-    title = '条件已满足，正在成团…';
+    title = '已成团';
     a = ['已拼', jpy(r.subtotal)];
     b = ['运费', r.fee ? `${jpy(r.perItem)}/件` : '包邮'];
   } else if (r.needFreeYen != null) {
@@ -297,7 +297,7 @@ function heroBlock(r, tiers) {
     b = ['包邮线', jpy(r.threshold)];
   } else {
     const t = r.targetPerItem;
-    title = t > 0 ? `每件运费降到 ${jpy(Math.floor(t))} 以下就成团` : '有人只接受包邮，这家店不包邮';
+    title = t > 0 ? `每件运费降到 ${jpy(Math.floor(t))} 以下就成团` : '等待团长处理';
     a = ['现在每件运费', jpy(r.perItem)];
     b = ['大家能接受', t > 0 ? `≤ ${jpy(Math.floor(t))}` : '—'];
   }
@@ -334,18 +334,17 @@ function renderOpen(d) {
     </section>
     ${
       d.items.length
-        ? `<section class="list"><div class="list-head"><span>${me ? '我的物品（仅自己和团长可见）' : '全部物品（团长视图）'}</span><span></span></div>
+        ? `<section class="list"><div class="list-head"><span>${me ? '我的物品' : '全部物品'}</span><span></span></div>
           ${d.items.map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${me ? '' : `${esc(i.cn)} · `}${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a><button class="mini" data-rm="${i.id}">撤销</button></div>`).join('')}</section>`
         : `<button class="btn line block" id="login">查看 / 撤销我的物品</button>`
     }
-    <p class="muted" style="margin:0;text-align:center">每个人买了什么只有本人和团长看得到</p>
     <button class="btn block" id="share">复制链接发到群里</button>
   </main>`;
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
   document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
     const txt = `【骏和屋拼单】${d.order.shop_name}：${r.members.length} 人 ${r.count} 件，${v.tag}！来拼 → ${location.origin}/#/order/${d.order.id}`;
-    navigator.clipboard?.writeText(txt).then(() => toast('已复制，去群里粘贴吧'), () => toast(txt, 6000));
+    navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast(txt, 6000));
   };
 }
 
@@ -359,7 +358,6 @@ function openSheet(html) {
 function askLogin() {
   openSheet(`<form class="sheet" id="lgf">
     <h2>查看我的物品</h2>
-    <p>输入加入时填的 CN 和 QQ 号后 4 位。</p>
     <div class="grid2">
       <div class="field"><label for="lcn">CN</label><input id="lcn" required value="${esc(store.get('cn') || '')}"></div>
       <div class="field"><label for="lpin">QQ 号后 4 位</label><input id="lpin" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required></div>
@@ -382,8 +380,7 @@ function askLogin() {
 
 function askRemove(itemId) {
   openSheet(`<div class="sheet">
-    <h2>确认撤销这件物品？</h2>
-    <p>撤销后其余人的运费会重新计算。</p>
+    <h2>撤销这件物品？</h2>
     <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn dark" id="rmok">确认撤销</button></div>
   </div>`);
   document.getElementById('rmok').onclick = async () => {
@@ -422,7 +419,7 @@ function renderDone(d) {
   if (!store.get('adminKey')) return;
   document.getElementById('copy').onclick = () => {
     const txt = d.items.map((i) => `${i.cn}\t${i.url}\t${jpy(i.price)} × ${i.qty}`).join('\n');
-    navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast('复制失败，请手动选择'));
+    navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast('复制失败'));
   };
   document.getElementById('csv').onclick = () => {
     const rows = [['CN', '商品', '链接', '单价', '数量'], ...d.items.map((i) => [i.cn, i.title || '', i.url, i.price, i.qty]), [], ['CN', '件数', '商品金额', '运费分摊', '应付'], ...s.rows.map((x) => [x.member, x.qty, x.goods, x.shipping, x.total])];
@@ -466,8 +463,8 @@ async function admin() {
       <button class="btn" id="saveg">保存</button>
     </section>
     ${list.orders.map(adminOrder).join('') || '<p class="empty-state">暂无拼单</p>'}
-    <section class="card"><h3>调试：查看骏和屋原始页面</h3>
-      <div class="admin-row"><input class="wide" id="dbg" placeholder="骏和屋链接"><input id="dbgf" placeholder="定位文字（可空）"><button class="btn" id="dbgb">查看</button></div>
+    <section class="card"><h3>原始页面</h3>
+      <div class="admin-row"><input class="wide" id="dbg" placeholder="骏和屋链接"><input id="dbgf" placeholder="关键字"><button class="btn" id="dbgb">查看</button></div>
       <pre id="dbgo" style="white-space:pre-wrap;font-size:11px;max-height:300px;overflow:auto;margin:0"></pre>
     </section>
     <button class="btn line" id="logout">退出后台</button>
@@ -516,7 +513,7 @@ function adminOrder(d) {
   return `<section class="card">
     <div class="card-head"><div><h3>${esc(o.shop_name)}</h3><span class="muted">店铺 ID ${esc(o.shop_id)} · ${o.status === 'open' ? '拼单中' : o.status === 'done' ? '已成团' : '已关闭'} · 运费来源：${{ auto: '自动抓取', manual: '手动', order: '本团单独', none: '未读到' }[d.tiersSource] || d.tiersSource}</span></div>
       <span class="tag ${r.success ? 'ok' : ''}">${r.count} 件 · ${jpy(r.subtotal)}</span></div>
-    <div class="admin-row"><span class="muted">运费</span><input id="fee-${o.id}" type="number" value="${fee0}"><span class="muted">满</span><input id="free-${o.id}" type="number" placeholder="无门槛留空" value="${free}"><span class="muted">包邮</span>
+    <div class="admin-row"><span class="muted">运费</span><input id="fee-${o.id}" type="number" value="${fee0}"><span class="muted">满</span><input id="free-${o.id}" type="number" placeholder="—" value="${free}"><span class="muted">包邮</span>
       <button class="mini" data-act="tiers" data-id="${o.id}" data-shop="${esc(o.shop_id)}">保存为该店运费</button>
       <button class="mini" data-act="auto" data-id="${o.id}" data-shop="${esc(o.shop_id)}">恢复自动</button></div>
     ${d.items.map((i) => `<div class="admin-row"><span style="flex:1;font-size:13px">${esc(i.cn)} · ${jpy(i.price)} × ${i.qty} · <a href="${esc(i.url)}" target="_blank" rel="noopener">链接</a></span><button class="mini" data-act="rmitem" data-id="${i.id}">移除</button></div>`).join('')}

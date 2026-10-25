@@ -166,7 +166,7 @@ async function api(req, env, url) {
   // 贴链接：返回商品、在售店铺、每家店的运费与当前拼单进度
   if (p === '/api/scrape' && m === 'GET') {
     const link = url.searchParams.get('url') || '';
-    if (!parseProductId(link)) return fail('请贴骏和屋商品链接（suruga-ya.jp/product/...）');
+    if (!parseProductId(link)) return fail('不是骏和屋商品链接');
     let data;
     try {
       data = await scrapeProduct(link);
@@ -227,10 +227,10 @@ async function api(req, env, url) {
     const pin = String(b.pin || '').trim();
     const qty = Math.max(1, Math.min(20, parseInt(b.qty, 10) || 1));
     const cap = Math.max(0, parseInt(b.cap, 10) || 0);
-    if (!cn || cn.length > 20) return fail('请填写 CN（20 字以内）');
-    if (!/^\d{4}$/.test(pin)) return fail('PIN 是 QQ 号后 4 位数字');
+    if (!cn || cn.length > 20) return fail('请填写 CN');
+    if (!/^\d{4}$/.test(pin)) return fail('请输入 QQ 号后 4 位');
     const productId = parseProductId(b.url);
-    if (!productId || !b.shopId || !b.branch) return fail('缺少商品或店铺信息');
+    if (!productId || !b.shopId || !b.branch) return fail('请选择店铺');
 
     // 价格以服务器重新抓到的为准，防止前端篡改
     let product;
@@ -240,12 +240,12 @@ async function api(req, env, url) {
       return fail(`读取骏和屋失败：${e.message}`, 502);
     }
     const listing = product.listings.find((l) => l.shopId === b.shopId && l.branch === b.branch);
-    if (!listing || listing.price == null) return fail('这家店的这件商品已下架或读不到价格');
+    if (!listing || listing.price == null) return fail('该商品已下架');
 
     // 成员：CN 第一次出现就创建；之后必须 PIN 一致
     const hash = await pinHash(env, cn, pin);
     let member = await env.DB.prepare('SELECT * FROM members WHERE group_id=? AND cn=?').bind(GROUP, cn).first();
-    if (member && member.pin_hash !== hash) return fail('这个 CN 已存在，PIN 不对', 403);
+    if (member && member.pin_hash !== hash) return fail('CN 或 QQ 后 4 位不对', 403);
     if (!member) {
       member = { id: uid() };
       await env.DB.prepare('INSERT INTO members (id, group_id, cn, pin_hash, created_at) VALUES (?,?,?,?,?)')
@@ -292,7 +292,7 @@ async function api(req, env, url) {
       .bind(mm[1])
       .first();
     if (!item) return fail('找不到这件商品', 404);
-    if (item.status !== 'open') return fail('已成团，撤销请联系团长', 409);
+    if (item.status !== 'open') return fail('已成团，无法撤销', 409);
     const isOwner = viewer.memberId === item.member_id;
     if (!isOwner && item.pin_hash !== (await pinHash(env, item.cn, String(b.pin || '')))) return fail('只能撤销自己的物品', 403);
     await env.DB.prepare("UPDATE items SET removed_at=?, removed_by='self' WHERE id=?").bind(now(), item.id).run();
@@ -359,7 +359,7 @@ async function api(req, env, url) {
 
     if (p === '/api/admin/members/reset-pin' && m === 'POST') {
       const b = await body(req);
-      if (!/^\d{4}$/.test(String(b.pin))) return fail('PIN 必须是 4 位数字');
+      if (!/^\d{4}$/.test(String(b.pin))) return fail('请输入 4 位数字');
       await env.DB.prepare('UPDATE members SET pin_hash=? WHERE group_id=? AND cn=?')
         .bind(await pinHash(env, b.cn, String(b.pin)), GROUP, b.cn)
         .run();
