@@ -23,6 +23,7 @@ const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAA
 const sent = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
+  if (u.includes('/product/other/ZHORE')) return new Response(fx('single.html'));
   if (u.includes('/product/other/')) return new Response(fx('other.html'));
   if (u.includes('/shop/delivery/')) return new Response(fx('delivery-fixed.html'));
   if (u.includes('/database/')) return new Response(PNG);
@@ -207,4 +208,18 @@ test('团长导出 Excel：一件一行，表头固定，带图片', async () =>
 
   const bad = await worker.fetch(new Request(`https://pin.example.com/api/admin/orders/${done.order.id}/export`), env);
   assert.equal(bad.status, 401);
+});
+
+test('店铺独自商品（ZHORE…）也能贴链接、加入', async () => {
+  const Z = 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985';
+  const s = await call(`/api/scrape?url=${encodeURIComponent(Z)}`);
+  assert.equal(s.status, 200);
+  assert.equal(s.data.listings.length, 1);
+  const l = s.data.listings[0];
+  assert.equal(l.shopId, '200985');
+  assert.equal(l.price, 650);
+  const r = await call('/api/join', 'POST', { url: l.url, shopId: l.shopId, branch: l.branch, cn: '阿柚', pin: '1130', cap: 500, qty: 1 });
+  assert.equal(r.status, 200, r.data.error);
+  assert.equal(r.data.items[0].price, 650);
+  assert.equal(r.data.items[0].url, Z);
 });

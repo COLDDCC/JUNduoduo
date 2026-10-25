@@ -109,6 +109,60 @@ export function parseOtherPage(html, productId) {
   return { productId, title, image: parseImage(html, productId), listings };
 }
 
+/** 单条出品时 branch_number 不存在，用这个占位 */
+export const SINGLE_BRANCH = '-';
+
+/**
+ * 解析只有一条出品的商品页（店铺独自商品，商品编号带字母，如 ZHORE185731）。
+ * 页面里没有 ?tenpo_cd=..&branch_number=.. 链接，只有：
+ *   「この商品は、<a href="/shop/200985">某店</a>が販売、発送します。」
+ *   「中古 650円 (税込) 在庫数：1」
+ */
+export function parseSinglePage(html, productId, hint = {}) {
+  const title = parseTitle(html);
+  const image = parseImage(html, productId);
+  const shopLink = /href=["'](?:https?:\/\/www\.suruga-ya\.jp)?\/shop\/(\d+)\/?["'][^>]*>([\s\S]*?)<\/a>/g;
+  let shopId = null;
+  let shopName = null;
+  // 优先取“が販売、発送します”前面那个店铺链接，其次取页面里第一个店铺链接
+  const sells = html.search(/が販売(?:、|・)?発送/);
+  const links = [...html.matchAll(shopLink)];
+  const pickLink = (sells >= 0 ? links.filter((x) => x.index < sells).pop() : null) || links[0];
+  if (pickLink) [shopId, shopName] = [pickLink[1], cleanShopName(decode(pickLink[2]))];
+  else if (hint.shopId) shopId = hint.shopId;
+  else if (sells >= 0 && /駿河屋が販売/.test(html)) shopId = HONTEN_ID;
+  if (!shopId) return { productId, title, image, listings: [] };
+  if (shopId === HONTEN_ID) shopName = '駿河屋（本店）';
+  if (!shopName) shopName = `店铺 ${shopId}`;
+
+  // 价格：“在庫数”前面最近的一个售价；没有在庫数（已售完）就当作不在售
+  let price = null;
+  let condition = null;
+  const stock = html.search(/在庫数/);
+  if (stock >= 0) {
+    const text = html
+      .slice(Math.max(0, stock - 2000), stock)
+      .replace(/<(s|del|strike)\b[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ');
+    const good = [...text.matchAll(/([\d,]{2,})\s*円/g)].filter(
+      (x) => !/定価|買取|参考|送料|ポイント/.test(text.slice(Math.max(0, x.index - 12), x.index)),
+    );
+    const last = good.at(-1);
+    if (last) {
+      price = Number(last[1].replace(/,/g, '')) || null;
+      const c = text.slice(Math.max(0, last.index - 60), last.index).match(/(中古[^\d|｜]{0,20}?|新品)\s*$/);
+      condition = c ? c[1].replace(/\s+/g, ' ').trim() : null;
+    }
+  }
+  const url = `${BASE}/product/detail/${productId}${shopId === HONTEN_ID ? '' : `?tenpo_cd=${shopId}`}`;
+  return {
+    productId,
+    title,
+    image,
+    listings: [{ shopId, shopName, branch: SINGLE_BRANCH, price, condition, url }],
+  };
+}
+
 /** 从一段 HTML 里挑出售价 */
 export function pickPrice(fragment) {
   const cleaned = String(fragment)
@@ -201,8 +255,11 @@ export async function scrapeProduct(url) {
   const id = parseProductId(url);
   if (!id) throw new Error('不是骏和屋商品链接');
   const html = await fetchHtml(`${BASE}/product/other/${id}`);
-  const data = parseOtherPage(html, id);
-  data.hint = parseListingHint(url);
+  const hint = parseListingHint(url);
+  let data = parseOtherPage(html, id);
+  // 店铺独自商品（如 ZHORE185731）只有一条出品，/product/other/ 直接显示商品页，没有出品链接
+  if (!data.listings.length) data = parseSinglePage(html, id, hint);
+  data.hint = hint;
   return data;
 }
 

@@ -5,6 +5,7 @@ import {
   parseProductId,
   parseListingHint,
   parseOtherPage,
+  parseSinglePage,
   parseDeliveryPage,
   HONTEN_ID,
 } from '../src/scrape.js';
@@ -74,4 +75,21 @@ test('src/schema.js 与 schema.sql 一致', async () => {
 test('只有“全国一律”一行的配送页', () => {
   const r = parseDeliveryPage(fx('delivery-flat.html'), '大阪府');
   assert.deepEqual(r.tiers, [{ min: 0, fee: 614 }]);
+});
+
+test('店铺独自商品：只有一条出品、没有 branch_number 的商品页', () => {
+  const r = parseSinglePage(fx('single.html'), 'ZHORE185731', { shopId: '200985', branch: null });
+  assert.equal(r.title, '男性向一般同人誌 Honey Trap / saku / シガーレス。');
+  assert.equal(r.listings.length, 1);
+  const l = r.listings[0];
+  assert.equal(l.shopId, '200985');
+  assert.equal(l.shopName, 'ブックマーケット函館美原店 Supported by 駿河屋');
+  assert.equal(l.price, 650, '取售价，不取定价');
+  assert.equal(l.condition, '中古');
+  assert.equal(l.url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
+  assert.equal(parseProductId('https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985'), 'ZHORE185731');
+  assert.equal(parseOtherPage(fx('single.html'), 'ZHORE185731').listings.length, 0);
+  // 售完（没有在庫数）→ 无售价
+  const sold = parseSinglePage(fx('single.html').replace('在庫数：1', '品切れ'), 'ZHORE185731');
+  assert.equal(sold.listings[0].price, null);
 });
