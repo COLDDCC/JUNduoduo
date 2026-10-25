@@ -84,11 +84,24 @@ test('完整流程：加入、PIN 校验、撤销、成团发邮件', async () =
   await join('糯米', '2468', 150);
   assert.equal(sent.length, 0);
   r = await join('七七', '1357', 100);
-  assert.equal(r.data.order.status, 'done');
-  assert.equal(r.data.mailStatus, 'sent');
+  // 满足条件不自动成团：保持拼单中，给团长发一封“可成团”提醒
+  assert.equal(r.data.result.success, true);
+  assert.equal(r.data.order.status, 'open');
   assert.equal(sent.length, 1);
-  assert.deepEqual(sent[0].to, ['buyer@example.com']);
-  assert.match(sent[0].html, /tenpo_cd=400486/);
+  assert.match(sent[0].subject, /可成团/);
+  // 仍满足条件时再加人，不会重复提醒
+  r = await join('八八', '8888', 1000);
+  assert.equal(r.data.result.success, true);
+  assert.equal(sent.length, 1);
+  await call(`/api/items/${r.data.items[0].id}/remove`, 'POST', {}, { 'X-Member-Token': r.data.token });
+  assert.equal(sent.length, 1);
+
+  // 团长确认成团 → 发正式下单邮件
+  const okRes = await call(`/api/admin/orders/${r.data.order.id}/done`, 'POST', {}, { 'X-Admin-Key': 'admin' });
+  assert.equal(okRes.data.mailStatus, 'sent');
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[1].to, ['buyer@example.com']);
+  assert.match(sent[1].html, /tenpo_cd=400486/);
 
   const list = await call('/api/orders');
   assert.equal(list.data.orders.length, 1);

@@ -62,7 +62,7 @@ function progressView(r) {
   const people = `${r.members.length} 人 · ${r.count} 件`;
   const perItem = r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮';
   if (r.success) {
-    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: perItem, headline: '<span>已成团</span>' };
+    return { tag: '可成团', ok: true, pct: 100, left: `${people} · ${jpy(r.subtotal)}`, right: perItem, headline: '<span>可成团</span>' };
   }
   const over = r.overCount ? `${r.overCount} 人超出运费上限` : '';
   if (r.needFreeYen != null) {
@@ -156,7 +156,8 @@ function shopPill(d, lead, done) {
   const iAmIn = d.me && r.members.some((m) => m.member === d.me);
   let unit, num;
   if (d.order.status === 'ordered') [unit, num] = ['', '已下单'];
-  else if (done || r.success) [unit, num] = ['', '成团'];
+  else if (done) [unit, num] = ['', '成团'];
+  else if (r.success) [unit, num] = ['', '可成团'];
   else if (r.needFreeYen != null) [unit, num] = ['差', jpy(r.needFreeYen)];
   else [unit, num] = ['每件', jpy(r.perItem)];
   const w = done ? 100 : Math.round(74 + 0.26 * v.pct);
@@ -242,7 +243,7 @@ async function pick(url) {
         store.set('cn', me.cn);
         if (res.token) store.set('token', res.token);
         store.set('cap', String(me.cap));
-        toast(res.order.status === 'done' ? '已成团' : '已加入');
+        toast(res.result.success ? '可成团' : '已加入');
         location.hash = `#/order/${res.order.id}`;
       } catch (err) {
         toast(err.message, 4000);
@@ -298,7 +299,7 @@ async function order(id) {
 function statBlock(r) {
   const v = progressView(r);
   let cap, num, sub;
-  if (r.success) [cap, num, sub] = ['已成团', jpy(r.subtotal), r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮'];
+  if (r.success) [cap, num, sub] = ['可成团', jpy(r.subtotal), `${r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮'} · 等待团长确认`];
   else if (r.needFreeYen != null) [cap, num, sub] = ['差', jpy(r.needFreeYen), `满 ${jpy(r.threshold)} 包邮`];
   else {
     const t = r.targetPerItem;
@@ -333,9 +334,11 @@ function renderOpen(d) {
         .join('')}
     </div>
     ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, true)}</div>` : ''}
-    ${!me ? `<button class="btn line block" id="login">我的物品</button>` : ''}
-    <button class="btn block" id="share">复制链接</button>
+    ${!me && !d.admin ? `<button class="btn line block" id="login">我的物品</button>` : ''}
+    ${d.admin ? `<button class="btn block${r.success ? '' : ' line'}" id="confirm">成团并发邮件</button>` : ''}
+    <button class="btn block${d.admin ? ' line' : ''}" id="share">复制链接</button>
   </main>`;
+  document.getElementById('confirm')?.addEventListener('click', () => askConfirm(d));
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
   document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
@@ -368,6 +371,25 @@ function askLogin() {
       store.set('token', res.token);
       store.set('cn', res.cn);
       $sheet.hidden = true;
+      route();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+}
+
+function askConfirm(d) {
+  const r = d.result;
+  openSheet(`<div class="sheet">
+    <h2>成团并发邮件</h2>
+    <p>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)} · ${r.fee ? `运费 ${jpy(r.fee)}` : '包邮'}${r.success ? '' : ' · 未满足条件'}</p>
+    <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn" id="cfok">成团</button></div>
+  </div>`);
+  document.getElementById('cfok').onclick = async () => {
+    try {
+      const res = await api(`/api/admin/orders/${d.order.id}/done`, { method: 'POST' });
+      $sheet.hidden = true;
+      toast(res.mailStatus === 'sent' ? '已成团，邮件已发送' : '已成团，邮件未发出');
       route();
     } catch (err) {
       toast(err.message);

@@ -270,3 +270,4 @@ button.pill.opt .pill-l small { white-space: nowrap; overflow: hidden; text-over
 .loading { text-align: left; padding: 20px 4px; }
 .toast { top: calc(16px + env(safe-area-inset-top)); bottom: auto; }
 .pill.done.ordered .pill-r { color: #8A8D99; }
+.sheet p { margin: -6px 0 0; font-size: 13px; color: #8A8D99; }

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS orders (
   done_at     INTEGER,
   mail_status TEXT,                           -- sent / failed:原因
   created_at  INTEGER NOT NULL,
+  ready_at    INTEGER,                        -- 满足成团条件的时间（等团长确认）
   order_no    TEXT,                           -- 团长下单后填的单号
   ordered_at  INTEGER
 );

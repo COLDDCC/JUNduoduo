@@ -65,3 +65,14 @@ export async function sendMail(env, { to, cc, subject, html, text }) {
   if (res.ok) return 'sent';
   return `failed:${res.status} ${(await res.text()).slice(0, 200)}`;
 }
+
+/** 满足成团条件时提醒团长确认 */
+export function buildReadyMail({ order, result, siteUrl }) {
+  const link = siteUrl ? `${siteUrl}/#/order/${order.id}` : '';
+  const fee = result.reason === 'free' ? '包邮' : `运费 ${jpy(result.fee)}，每件 ${jpy(result.perItem)}`;
+  return {
+    subject: `【可成团】${order.shop_name} · ${result.members.length}人 ${result.count}件`,
+    text: `${order.shop_name} 已满足成团条件（${fee}）。确认后在拼单页点“成团”。\n${link}`,
+    html: `<div style="font-family:sans-serif;font-size:14px"><p><b>${esc(order.shop_name)}</b> 已满足成团条件（${fee}）。</p>${link ? `<p><a href="${esc(link)}">打开拼单页确认成团</a></p>` : ''}</div>`,
+  };
+}

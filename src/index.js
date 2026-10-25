@@ -2,7 +2,7 @@
 // 静态页面由 [assets] 提供（public/），这里只处理 /api/*
 import { scrapeProduct, scrapeShipping, fetchHtml, parseProductId, HONTEN_ID } from './scrape.js';
 import { evaluate, settle } from './calc.js';
-import { buildMail, sendMail } from './mail.js';
+import { buildMail, buildReadyMail, sendMail } from './mail.js';
 import SCHEMA from './schema.js';
 
 const GROUP = 'default';
@@ -61,7 +61,11 @@ function forViewer(data, viewer) {
   return { ...rest, items: mine, me: viewer.cn || null };
 }
 
-const MIGRATIONS = ['ALTER TABLE orders ADD COLUMN order_no TEXT', 'ALTER TABLE orders ADD COLUMN ordered_at INTEGER'];
+const MIGRATIONS = [
+  'ALTER TABLE orders ADD COLUMN order_no TEXT',
+  'ALTER TABLE orders ADD COLUMN ordered_at INTEGER',
+  'ALTER TABLE orders ADD COLUMN ready_at INTEGER',
+];
 
 /** 首次访问时自动建表（CREATE TABLE IF NOT EXISTS，可重复执行） */
 let schemaReady = null;
@@ -152,6 +156,20 @@ async function loadOrder(env, order, prefecture) {
     result,
     settle: settle(result),
   };
+}
+
+/** 成团条件变化时：首次满足 → 记录并提醒团长；不再满足 → 清除 */
+async function syncReady(env, group, data, siteUrl) {
+  const { order, result } = data;
+  if (order.status !== 'open') return;
+  if (result.success && !order.ready_at) {
+    await env.DB.prepare('UPDATE orders SET ready_at=? WHERE id=?').bind(now(), order.id).run();
+    data.order.ready_at = now();
+    if (group.buyer_email) await sendMail(env, { to: group.buyer_email, ...buildReadyMail({ ...data, siteUrl }) });
+  } else if (!result.success && order.ready_at) {
+    await env.DB.prepare('UPDATE orders SET ready_at=NULL WHERE id=?').bind(order.id).run();
+    data.order.ready_at = null;
+  }
 }
 
 async function finalize(env, group, data, siteUrl) {
@@ -299,10 +317,8 @@ async function api(req, env, url) {
 
     const full = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(order.id).first();
     const data = await loadOrder(env, full, pref);
-    if (data.result.success) {
-      data.mailStatus = await finalize(env, group, data, site);
-      data.order.status = 'done';
-    }
+    // 满足条件不自动成团，提醒团长确认
+    await syncReady(env, group, data, site);
     // 加入即视为本人已登录
     return json({ ...forViewer(data, { memberId: member.id, cn }), token: await makeToken(env, member.id) });
   }
@@ -326,7 +342,9 @@ async function api(req, env, url) {
       .bind(now(), isOwner ? 'self' : viewer.admin ? 'admin' : 'self', item.id)
       .run();
     const o = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(item.order_id).first();
-    return json(forViewer(await loadOrder(env, o, pref), viewer.admin ? viewer : { memberId: item.member_id, cn: item.cn }));
+    const after = await loadOrder(env, o, pref);
+    await syncReady(env, group, after, site);
+    return json(forViewer(after, viewer.admin ? viewer : { memberId: item.member_id, cn: item.cn }));
   }
 
   // ---------- 团长后台 ----------
@@ -398,6 +416,9 @@ async function api(req, env, url) {
 
     if ((mm = p.match(/^\/api\/admin\/items\/([\w-]+)$/)) && m === 'DELETE') {
       await env.DB.prepare("UPDATE items SET removed_at=?, removed_by='admin' WHERE id=?").bind(now(), mm[1]).run();
+      const it = await env.DB.prepare('SELECT order_id FROM items WHERE id=?').bind(mm[1]).first();
+      const o = it && (await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(it.order_id).first());
+      if (o) await syncReady(env, group, await loadOrder(env, o, pref), site);
       return json({ ok: true });
     }
 
