@@ -114,6 +114,17 @@ export function parseOtherPage(html, productId) {
   return { productId, title, image: parseImage(html, productId), listings };
 }
 
+/** Parse the actual sale price next to stock, ignoring MSRP, shipping and buyback prices. */
+export function parseDetailSale(html) {
+  const txt = decode(String(html)
+    .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi, ' ')
+    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' '));
+  const m = txt.match(/(中古|新品)(?:\\s|[^円]){0,100}?([\\d,]+)\\s*円\\s*(?:\\(税込\\))?\\s*在庫数\\s*[：:]?\\s*(\\d+)/);
+  if (!m || Number(m[3]) === 0) return { price: null, condition: null };
+  return { price: Number(m[2].replace(/,/g, '')), condition: m[1] };
+}
+
 /** 单条出品时 branch_number 不存在，用这个占位 */
 export const SINGLE_BRANCH = '-';
 
@@ -140,25 +151,8 @@ export function parseSinglePage(html, productId, hint = {}) {
   if (shopId === HONTEN_ID) shopName = '駿河屋（本店）';
   if (!shopName) shopName = `店铺 ${shopId}`;
 
-  // 价格：“在庫数”前面最近的一个售价；没有在庫数（已售完）就当作不在售
-  let price = null;
-  let condition = null;
-  const stock = html.search(/在庫数/);
-  if (stock >= 0) {
-    const text = html
-      .slice(Math.max(0, stock - 2000), stock)
-      .replace(/<(s|del|strike)\b[\s\S]*?<\/\1>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ');
-    const good = [...text.matchAll(/([\d,]{2,})\s*円/g)].filter(
-      (x) => !/定価|買取|参考|送料|ポイント/.test(text.slice(Math.max(0, x.index - 12), x.index)),
-    );
-    const last = good.at(-1);
-    if (last) {
-      price = Number(last[1].replace(/,/g, '')) || null;
-      const c = text.slice(Math.max(0, last.index - 60), last.index).match(/(中古[^\d|｜]{0,20}?|新品)\s*$/);
-      condition = c ? c[1].replace(/\s+/g, ' ').trim() : null;
-    }
-  }
+  // Search rendered text, not raw HTML offsets: markup between price and stock can be large.
+  const { price, condition } = parseDetailSale(html);
   const url = `${BASE}/product/detail/${productId}${shopId === HONTEN_ID ? '' : `?tenpo_cd=${shopId}`}`;
   return {
     productId,
@@ -291,6 +285,20 @@ export async function scrapeProduct(url) {
   let data = parseOtherPage(html, id);
   // 店铺独自商品（如 ZHORE185731）只有一条出品，/product/other/ 直接显示商品页，没有出品链接
   if (!data.listings.length) data = parseSinglePage(html, id, hint);
+  // The aggregate page may expose a shop but omit its price. Fetch its detail page.
+  for (const listing of data.listings.slice(0, 12)) {
+    if (listing.price != null) continue;
+    try {
+      const detail = await fetchHtml(listing.url);
+      const sale = parseDetailSale(detail);
+      if (sale.price != null) {
+        listing.price = sale.price;
+        listing.condition ||= sale.condition;
+      }
+    } catch (_) {
+      // Preserve the product and shop when an individual detail request fails.
+    }
+  }
   data.hint = hint;
   return data;
 }
