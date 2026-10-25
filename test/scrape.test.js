@@ -93,3 +93,16 @@ test('店铺独自商品：只有一条出品、没有 branch_number 的商品�
   const sold = parseSinglePage(fx('single.html').replace('在庫数：1', '品切れ'), 'ZHORE185731');
   assert.equal(sold.listings[0].price, null);
 });
+
+test('店铺链接只有 tenpo_cd、没有 branch_number 时仍可解析', () => {
+  const html = `<html><title>Honey Trap / saku / シガーレス。</title>
+  <div>中古 650円</div>
+  <a href="/product/detail/ZHORE185731?tenpo_cd=200985">中古</a>
+  <a href="/shop/200985">ブックマーケット函館美原店</a></html>`;
+  const r = parseOtherPage(html, 'ZHORE185731');
+  assert.equal(r.listings.length, 1);
+  assert.equal(r.listings[0].shopId, '200985');
+  assert.equal(r.listings[0].branch, null);
+  assert.equal(r.listings[0].price, 650);
+  assert.equal(r.listings[0].url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
+});
