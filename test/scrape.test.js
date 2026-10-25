@@ -5,6 +5,7 @@ import {
   parseProductId,
   parseListingHint,
   parseOtherPage,
+  parseSingleShopDetail,
   parseSinglePage,
   parseDeliveryPage,
   HONTEN_ID,
@@ -105,4 +106,16 @@ test('店铺链接只有 tenpo_cd、没有 branch_number 时仍可解析', () =>
   assert.equal(r.listings[0].branch, null);
   assert.equal(r.listings[0].price, 650);
   assert.equal(r.listings[0].url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
+});
+
+test('唯一店铺详情页没有出品链接时恢复商品价格与店铺', () => {
+  const html = `<h1>Honey Trap</h1>
+    <a href="/product/detail/ZHORE185731?tenpo_cd=200985">商品</a>
+    <p>中古 650円 (税込) 在庫数：1</p>
+    <a href="/shop/200985">ブックマーケット函館美原店</a>`;
+  const r = parseSingleShopDetail(html, 'ZHORE185731');
+  assert.equal(r.shopId, '200985');
+  assert.equal(r.price, 650);
+  assert.equal(r.url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
+  assert.equal(parseSingleShopDetail(html + '申し訳ございません。品切れ中です。', 'ZHORE185731'), null);
 });
