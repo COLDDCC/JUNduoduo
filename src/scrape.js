@@ -85,7 +85,7 @@ export function parseOtherPage(html, productId) {
     let shopName = '駿河屋（本店）';
     if (h.tenpo) {
       const nm = chunk.match(new RegExp(`/shop/${h.tenpo}"[^>]*>([\\s\\S]*?)</a>`));
-      shopName = nm ? decode(nm[1]) || `店铺 ${h.tenpo}` : `店铺 ${h.tenpo}`;
+      shopName = nm ? cleanShopName(decode(nm[1])) || `店铺 ${h.tenpo}` : `店铺 ${h.tenpo}`;
     }
     // 价格：在“上一条出品链接 → 这条链接”之间找（骏和屋把价格放在链接前面），
     // 去掉划线原价、定价、买取价、包邮门槛这类数字后取最小值（限时降价时取现价）
@@ -136,16 +136,21 @@ function lastYen(s) {
 export function parseImage(html, productId) {
   const og = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
     html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
-  if (og && /^https?:\/\//.test(og[1])) return og[1].replace(/&amp;/g, '&');
+  if (og && /^https?:\/\//.test(og[1]) && !/bgLogo|logo/i.test(og[1])) return og[1].replace(/&amp;/g, '&');
   const img = html.match(new RegExp(`(https://www\\.suruga-ya\\.jp/database/[^"'\\s]*${productId}[^"'\\s]*\\.(?:jpg|png|webp))`));
-  return img ? img[1] : `${BASE}/database/pics_light/game/${productId}.jpg`;
+  return img ? img[1] : `${BASE}/database/photo.php?shinaban=${productId}&size=m`;
+}
+
+/** 店名后面常跟着公告（“（全出品アイテム…）●ご注文前に…”），只留店名 */
+export function cleanShopName(name) {
+  return String(name).split(/[（(●【★※]/)[0].trim();
 }
 
 export function parseTitle(html) {
   const h1 = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
-  if (h1 && decode(h1[1])) return decode(h1[1]);
   const t = html.match(/<title>([\s\S]*?)<\/title>/);
-  return t ? decode(t[1]).replace(/\s*[|｜:].*$/, '') : null;
+  const raw = h1 && decode(h1[1]) ? decode(h1[1]) : t ? decode(t[1]).replace(/\s*[|｜:].*$/, '') : null;
+  return raw ? raw.replace(/の取り?扱い?店舗一覧$/, '').trim() : null;
 }
 
 /**
@@ -159,8 +164,9 @@ export function parseDeliveryPage(html, prefecture = '大阪府') {
   const name = (html.match(/<title>([\s\S]*?)<\/title>/) || [])[1];
   const shopName = name ? decode(name).replace(/\s*≫.*$/, '') : null;
 
-  const rowRe = new RegExp(`${prefecture}\\s*</t[hd]>([\\s\\S]*?)</tr>`);
-  const row = html.match(rowRe);
+  // 先找收货地那一行，没有就找“全国一律”
+  const rowOf = (label) => html.match(new RegExp(`${label}\\s*</t[hd]>([\\s\\S]*?)</tr>`));
+  const row = rowOf(prefecture) || rowOf('全国一律');
   if (!row) return { shopName, tiers: null };
   const cells = [...row[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((c) => decode(c[1]));
 

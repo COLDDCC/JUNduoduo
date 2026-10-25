@@ -32,7 +32,9 @@ test('链接里的出品信息', () => {
 test('解析在售店铺列表（去重、本店、按价格排序）', () => {
   const r = parseOtherPage(fx('other.html'), '120158641');
   assert.match(r.title, /進撃の巨人/);
-  assert.equal(r.image, 'https://www.suruga-ya.jp/database/pics_light/game/120158641.jpg');
+  assert.equal(r.title, '進撃の巨人 The Final Season Original Sound Track Complete Album[Blu-ray付]');
+  assert.equal(r.image, 'https://www.suruga-ya.jp/database/photo.php?shinaban=120158641&size=m');
+  assert.equal(r.listings[1].shopName, 'ブックマーケットエーツー豊川店');
   assert.equal(r.listings.length, 4);
   assert.deepEqual(
     r.listings.map((l) => [l.shopId, l.branch, l.price]),
@@ -67,4 +69,9 @@ test('满额包邮的配送页', () => {
 test('src/schema.js 与 schema.sql 一致', async () => {
   const { default: js } = await import('../src/schema.js');
   assert.equal(js, readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+});
+
+test('只有“全国一律”一行的配送页', () => {
+  const r = parseDeliveryPage(fx('delivery-flat.html'), '大阪府');
+  assert.deepEqual(r.tiers, [{ min: 0, fee: 614 }]);
 });
