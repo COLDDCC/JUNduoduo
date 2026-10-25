@@ -122,13 +122,31 @@ export function parseOtherPage(html, productId) {
 
 /** Parse the actual sale price next to stock, ignoring MSRP, shipping and buyback prices. */
 export function parseDetailSale(html) {
-  const txt = decode(String(html)
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+  const raw = String(html);
+  const txt = decode(raw.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' '));
-  const m = txt.match(/(中古|新品)[^\n円]{0,100}?([\d,]+)\s*円\s*(?:\(税込\))?\s*在庫数\s*[：:]?\s*(\d+)/);
-  if (!m || Number(m[3]) === 0) return { price: null, condition: null };
-  return { price: Number(m[2].replace(/,/g, '')), condition: m[1] };
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&yen;|&#165;|&#xA5;/gi, '円')
+    .replace(/[\u00a0\u2000-\u200b\u202f\u3000]/g, ' '));
+  const patterns = [
+    /(?:中古|新品)[^円]{0,250}?([\d,]+)\s*円(?:\s*[\(（]税込[\)）])?(?:\s|[^円]){0,160}?在庫数\s*[：:]?\s*(\d+)/,
+    /([\d,]+)\s*円(?:\s*[\(（]税込[\)）])?\s*在庫数\s*[：:]?\s*(\d+)/,
+    /(?:中古|新品)[^円]{0,100}?([\d,]+)\s*円\s*[\(（]税込[\)）]/,
+    /(?:販売価格|商品価格|価格)\s*[：:]?\s*(?:￥|¥)?\s*([\d,]+)\s*円/
+  ];
+  for (const re of patterns) {
+    const m = txt.match(re);
+    if (!m) continue;
+    if (m[2] !== undefined && Number(m[2]) === 0) continue;
+    const price = Number(m[1].replace(/,/g, ''));
+    if (price > 0 && price < 100000000) {
+      const context = txt.slice(Math.max(0, m.index - 30), m.index + m[0].length);
+      return { price, condition: /中古/.test(context) ? '中古' : /新品/.test(context) ? '新品' : null };
+    }
+  }
+  const structured = raw.match(/["']price["']\s*:\s*["']?([\d,]+)(?:\.\d+)?/i) ||
+    raw.match(/itemprop=["']price["'][^>]*content=["']([\d,]+)/i);
+  return structured ? { price: Number(structured[1].replace(/,/g, '')), condition: null } : { price: null, condition: null };
 }
 
 /** 单条出品时 branch_number 不存在，用这个占位 */
@@ -286,24 +304,48 @@ export const HONTEN_DEFAULT_TIERS = [
 export async function scrapeProduct(url) {
   const id = parseProductId(url);
   if (!id) throw new Error('不是骏和屋商品链接');
-  const html = await fetchHtml(`${BASE}/product/other/${id}`);
   const hint = parseListingHint(url);
-  let data = parseOtherPage(html, id);
-  // 店铺独自商品（如 ZHORE185731）只有一条出品，/product/other/ 直接显示商品页，没有出品链接
-  if (!data.listings.length) data = parseSinglePage(html, id, hint);
-  // The aggregate page may expose a shop but omit its price. Fetch its detail page.
+  let direct = null;
+  if (hint.shopId) {
+    try {
+      const html = await fetchHtml(url);
+      direct = parseSinglePage(html, id, hint);
+      const sale = parseDetailSale(html);
+      if (direct.listings.length && sale.price != null) {
+        direct.listings[0].price = sale.price;
+        direct.listings[0].condition ||= sale.condition;
+      }
+    } catch (_) { /* retry via aggregate page */ }
+  }
+  let data;
+  try {
+    const html = await fetchHtml(BASE + '/product/other/' + id);
+    data = parseOtherPage(html, id);
+    if (!data.listings.length) data = parseSinglePage(html, id, hint);
+  } catch (err) {
+    if (!direct?.listings.length) throw err;
+    data = direct;
+  }
+  if (direct?.listings.length) {
+    for (const listing of direct.listings) {
+      const existing = data.listings.find((l) => l.shopId === listing.shopId && (!hint.branch || l.branch === hint.branch));
+      if (existing) {
+        if (listing.price != null) existing.price = listing.price;
+      } else data.listings.push(listing);
+    }
+    data.title ||= direct.title;
+    data.image ||= direct.image;
+  }
   for (const listing of data.listings.slice(0, 12)) {
     if (listing.price != null) continue;
     try {
-      const detail = await fetchHtml(listing.url);
-      const sale = parseDetailSale(detail);
+      const html = await fetchHtml(listing.url);
+      const sale = parseDetailSale(html);
       if (sale.price != null) {
         listing.price = sale.price;
         listing.condition ||= sale.condition;
       }
-    } catch (_) {
-      // Preserve the product and shop when an individual detail request fails.
-    }
+    } catch (_) { /* preserve shop when detail fails */ }
   }
   data.hint = hint;
   return data;
