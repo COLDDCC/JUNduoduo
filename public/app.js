@@ -349,6 +349,7 @@ function renderOpen(d) {
   $app.innerHTML = `
   ${subHead(d.order.shop_name)}
   <main class="lite-main">
+    <p class="lite-cap">店铺 ID：${esc(d.order.shop_id)}</p>
     ${statBlock(r)}
     <div class="rows">
       ${r.members
@@ -450,6 +451,7 @@ function renderDone(d) {
   $app.innerHTML = `
   ${subHead(d.order.shop_name)}
   <main class="lite-main">
+    <p class="lite-cap">店铺 ID：${esc(d.order.shop_id)}</p>
     <section class="stat ${closed ? 'muted' : 'ok'}"><small>${closed ? '已关闭' : ordered ? `已下单 · 单号 ${esc(d.order.order_no)}` : `已成团 · ${when}`}</small><b>${jpy(s.sum)}</b><span>${r.fee ? `运费 ${jpy(r.fee)} · 每件 ${jpy(r.perItem)}` : '包邮'}${closed || mailOk ? '' : ' · 邮件未发出'}</span></section>
     <div class="rows">
       ${s.rows.map((x) => `<div class="row"><span class="row-l"><b>${esc(x.member)}${x.member === d.me ? ' · 我' : ''}</b><small>${x.qty}件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</small></span><span class="row-r"><span>${jpy(x.total)}</span></span></div>`).join('')}
