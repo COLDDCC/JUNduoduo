@@ -9,7 +9,6 @@ const fx = (name) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url)
 
 function makeD1() {
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
     first: async () => db.prepare(sql).get(...args) ?? null,

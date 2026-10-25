@@ -3,6 +3,7 @@
 import { scrapeProduct, scrapeShipping, fetchHtml, parseProductId, HONTEN_ID } from './scrape.js';
 import { evaluate, settle } from './calc.js';
 import { buildMail, sendMail } from './mail.js';
+import SCHEMA from './schema.js';
 
 const GROUP = 'default';
 const SHOP_CACHE_MS = 7 * 24 * 3600 * 1000;
@@ -59,7 +60,24 @@ function forViewer(data, viewer) {
   return { ...rest, items: mine, me: viewer.cn || null };
 }
 
+/** 首次访问时自动建表（CREATE TABLE IF NOT EXISTS，可重复执行） */
+let schemaReady = null;
+function ensureSchema(env) {
+  if (!schemaReady) {
+    const stmts = SCHEMA.replace(/--[^\n]*/g, '')
+      .split(';')
+      .map((x) => x.trim())
+      .filter(Boolean);
+    schemaReady = env.DB.batch(stmts.map((x) => env.DB.prepare(x))).catch((e) => {
+      schemaReady = null;
+      throw e;
+    });
+  }
+  return schemaReady;
+}
+
 async function getGroup(env) {
+  await ensureSchema(env);
   let g = await env.DB.prepare('SELECT * FROM groups WHERE id = ?').bind(GROUP).first();
   if (!g) {
     await env.DB.prepare(

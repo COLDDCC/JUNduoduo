@@ -63,3 +63,8 @@ test('满额包邮的配送页', () => {
     { min: 2000, fee: 0 },
   ]);
 });
+
+test('src/schema.js 与 schema.sql 一致', async () => {
+  const { default: js } = await import('../src/schema.js');
+  assert.equal(js, readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+});

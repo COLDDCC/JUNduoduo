@@ -54,17 +54,15 @@ test/          测试（node --test，无需安装依赖）
 
 ## 部署
 
-全部在 GitHub 仓库的 Settings → Secrets and variables → Actions 里填，推送到 main 后自动测试、建库、部署。
+Cloudflare 后台 → Workers & Pages → Create → Workers → Import a repository → 选本仓库。Build command 留空，Deploy command 为 `npx wrangler deploy`。之后每次推送到 main 自动部署。
 
-| Secret | 说明 |
-| --- | --- |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare → My Profile → API Tokens → Create Token → “Edit Cloudflare Workers” 模板，权限里再加 Account · D1 · Edit |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 后台 Workers 页面右侧的 Account ID |
-| `ADMIN_KEY` | 团长后台口令 |
-| `PIN_SALT` | 任意随机字符串，设好后不要改 |
-| `RESEND_API_KEY` | 可选，Resend 的 API Key；不填则成团时不发邮件 |
+1. Storage & Databases → D1 → Create，名字 `junduoduo`，把 Database ID 填进 `wrangler.toml`。表结构在 Worker 首次访问时自动创建。
+2. Worker → Settings → Variables and Secrets，添加 Secret：
+   - `ADMIN_KEY`：团长后台口令
+   - `PIN_SALT`：任意随机字符串，设好后不要改
+   - `RESEND_API_KEY`：可选，不填则成团时不发邮件
 
-填完后到 Actions → 测试并部署 → Run workflow。网址为 `https://junduoduo.<你的子域名>.workers.dev`，团长后台为网址后加 `/#/admin`。
+网址为 `https://junduoduo.<你的子域名>.workers.dev`，团长后台为网址后加 `/#/admin`。
 
 ## 使用
 
