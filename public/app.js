@@ -23,6 +23,9 @@ const searchIcon =
 const backIcon =
   '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 
+const subHead = (title) =>
+  `<header class="lite-head sub"><div class="lite-row"><a class="lite-back" href="#/" aria-label="返回">${backIcon}</a><span class="lite-title">${esc(title)}</span></div></header>`;
+
 function toast(msg, ms = 2600) {
   $toast.textContent = msg;
   $toast.hidden = false;
@@ -178,22 +181,18 @@ function shopCard(d) {
 
 // ---------- 贴链接 → 选分店 ----------
 async function pick(url) {
-  $app.innerHTML = `
-  <header class="hero" style="background:#fff;color:var(--ink);padding:10px 16px;border-bottom:1px solid #EDE6E0">
-    <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>选一家店加入</h1></div>
-  </header>
-  <main style="margin-top:0"><p class="loading">读取中…</p></main>`;
+  $app.innerHTML = `${subHead('选择店铺')}<main class="lite-main"><p class="loading">读取中</p></main>`;
   const $main = $app.querySelector('main');
   let data;
   try {
     data = await api(`/api/scrape?url=${encodeURIComponent(url || '')}`);
   } catch (e) {
-    $main.innerHTML = `<p class="empty-state">${esc(e.message)}</p><a class="btn block" href="#/">返回</a>`;
+    $main.innerHTML = `<p class="lite-empty">${esc(e.message)}</p>`;
     return;
   }
   const L = data.listings.filter((l) => l.price != null);
   if (!L.length) {
-    $main.innerHTML = '<p class="empty-state">暂无在售</p><a class="btn block" href="#/">返回</a>';
+    $main.innerHTML = '<p class="lite-empty">暂无在售</p>';
     return;
   }
   const hint = data.hint || {};
@@ -202,24 +201,28 @@ async function pick(url) {
   const me = { cn: store.get('cn') || '', qty: 1, cap: Number(store.get('cap') || 150) };
 
   const render = () => {
+    const pinVal = document.getElementById('pin')?.value || '';
     $main.innerHTML = `
     <div class="product">${thumb(data.image, 'lg')}<div class="product-title">${esc(data.title || '骏和屋商品')}</div></div>
-    ${L.map((l, i) => optCard(l, i === sel, me, i)).join('')}
-    <form class="form" id="join">
+    <p class="lite-cap">在售 ${L.length}</p>
+    <div class="pills">${L.map((l, i) => optCard(l, i === sel, me, i)).join('')}</div>
+    <p class="preview-line">${previewOf(L[sel], me)}</p>
+    <form class="lite-form" id="join">
       <div class="grid2">
-        <div class="field"><label for="cn">你的 CN</label><input id="cn" maxlength="20" required value="${esc(me.cn)}"></div>
-        <div class="field"><label for="pin">QQ 号后 4 位</label><input id="pin" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required style="letter-spacing:6px"></div>
+        <label class="lf"><span>CN</span><input id="cn" maxlength="20" required value="${esc(me.cn)}"></label>
+        <label class="lf"><span>QQ 后 4 位</span><input id="pin" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required value="${esc(pinVal)}"></label>
       </div>
-      <div class="field"><label for="cap">最多愿意分摊的运费（日元）</label><input id="cap" type="number" inputmode="numeric" min="0" step="10" value="${me.cap}"></div>
-      <div class="qty"><span style="width:auto;font-weight:400;font-size:13px;color:var(--ink-2)">数量</span>
-        <div><button type="button" id="minus" aria-label="减少">−</button><span id="q">${me.qty}</span><button type="button" id="plus" aria-label="增加">+</button></div></div>
-      <button class="btn block" id="submit">加入拼单</button>
+      <div class="grid2">
+        <label class="lf"><span>运费上限</span><input id="cap" type="number" inputmode="numeric" min="0" step="10" value="${me.cap}"></label>
+        <div class="lf"><span>数量</span><div class="stepper"><button type="button" id="minus" aria-label="减少">−</button><b>${me.qty}</b><button type="button" id="plus" aria-label="增加">+</button></div></div>
+      </div>
+      <button class="btn block" id="submit">加入</button>
     </form>`;
-    $main.querySelectorAll('.opt').forEach((el) => (el.onclick = () => { sel = Number(el.dataset.i); keep(); render(); }));
     const keep = () => {
       me.cn = document.getElementById('cn').value.trim();
       me.cap = Number(document.getElementById('cap').value) || 0;
     };
+    $main.querySelectorAll('.opt').forEach((el) => (el.onclick = () => { keep(); sel = Number(el.dataset.i); render(); }));
     document.getElementById('cap').onchange = () => { keep(); render(); };
     document.getElementById('minus').onclick = () => { keep(); me.qty = Math.max(1, me.qty - 1); render(); };
     document.getElementById('plus').onclick = () => { keep(); me.qty = Math.min(20, me.qty + 1); render(); };
@@ -229,7 +232,6 @@ async function pick(url) {
       const pin = document.getElementById('pin').value.trim();
       const btn = document.getElementById('submit');
       btn.disabled = true;
-      btn.textContent = '提交中';
       try {
         const l = L[sel];
         const res = await api('/api/join', {
@@ -239,120 +241,103 @@ async function pick(url) {
         store.set('cn', me.cn);
         if (res.token) store.set('token', res.token);
         store.set('cap', String(me.cap));
-        toast(res.order.status === 'done' ? '已成团' : '加入成功');
+        toast(res.order.status === 'done' ? '已成团' : '已加入');
         location.hash = `#/order/${res.order.id}`;
       } catch (err) {
         toast(err.message, 4000);
         btn.disabled = false;
-        btn.textContent = '加入拼单';
       }
     };
   };
   render();
 }
 
-function optCard(l, selected, me, idx) {
-  const tiers = l.tiers;
+/** 选中店铺：加入后的结果，一行 */
+function previewOf(l, me) {
   const p = l.progress;
-  // 预览：把“我”加进去，重新算一次
+  if (!l.tiers) return '运费待确认';
   const items = (p?.members || []).map((m) => ({ member: m.member, price: m.goods / m.qty, qty: m.qty }));
   const caps = Object.fromEntries((p?.members || []).map((m) => [m.member, m.cap]));
   const self = me.cn || '我';
   items.push({ member: self, price: l.price, qty: me.qty });
   caps[self] = me.cap;
-  const after = tiers ? evaluate({ items, caps, tiers }) : null;
-  let preview = '运费待确认';
-  if (after) {
-    const mine = after.members.find((m) => m.member === self);
-    if (after.success) preview = after.reason === 'free' ? `你加入后：${jpy(after.subtotal)} · 直接包邮成团` : `你加入后：每件运费 ${jpy(after.perItem)} · 直接成团`;
-    else if (after.needFreeYen != null) preview = `你加入后：已拼 ${jpy(after.subtotal)} · 还差 ${jpy(after.needFreeYen)} 包邮`;
-    else preview = `你加入后：每件运费 ${jpy(after.perItem)}，你分摊 ${jpy(mine.share)}${mine.ok ? '' : '（超出你的上限）'}`;
-  }
-  const people = p ? `${p.members.length} 人在拼 · ` : '';
-  return `<div class="opt ${selected ? 'sel' : ''}" data-i="${idx}">
-    <div class="opt-head"><label><input type="radio" name="shop" ${selected ? 'checked' : ''}>${esc(l.shopName)}</label><span class="price">${jpy(l.price)}</span></div>
-    <span class="preview">${people}${describeTiers(tiers)}</span>
-    ${selected ? `<span class="preview strong">${preview.replace('你加入后：', '加入后 ')}</span>` : ''}</div>`;
+  const after = evaluate({ items, caps, tiers: l.tiers });
+  const mine = after.members.find((m) => m.member === self);
+  if (after.success) return after.reason === 'free' ? '加入后包邮成团' : `加入后成团 · 每件运费 ${jpy(after.perItem)}`;
+  if (after.needFreeYen != null) return `加入后差 ${jpy(after.needFreeYen)} 包邮`;
+  return `加入后每件运费 ${jpy(after.perItem)}${mine.ok ? '' : ' · 超出你的上限'}`;
+}
+
+function optCard(l, selected, me, idx) {
+  const p = l.progress;
+  const people = p ? `${p.members.length}人在拼 · ` : '';
+  return `<button type="button" class="pill opt${selected ? ' lead' : ''}" data-i="${idx}" style="width:100%">
+    <span class="pill-l"><b>${esc(l.shopName)}</b><small>${people}${describeTiers(l.tiers)}${l.condition && l.condition !== '中古' ? ` · ${esc(l.condition)}` : ''}</small></span>
+    <span class="pill-r"><span>${jpy(l.price)}</span></span></button>`;
 }
 
 // ---------- 拼单详情 / 撤销 / 成团分账 ----------
 async function order(id) {
-  $app.innerHTML = '<p class="loading">读取中…</p>';
+  $app.innerHTML = `${subHead('')}<main class="lite-main"><p class="loading">读取中</p></main>`;
   const load = async () => {
     try {
       const d = await api(`/api/orders/${id}`);
-      if (!$sheet.hidden) return; // 正在输 PIN 时不刷新
+      if (!$sheet.hidden) return;
       d.order.status === 'open' ? renderOpen(d) : renderDone(d);
       if (d.order.status !== 'open') clearInterval(timer);
     } catch (e) {
-      $app.innerHTML = `<p class="empty-state">${esc(e.message)}</p><main><a class="btn block" href="#/">回首页</a></main>`;
+      $app.innerHTML = `${subHead('')}<main class="lite-main"><p class="lite-empty">${esc(e.message)}</p></main>`;
     }
   };
   await load();
   timer = setInterval(load, 10000);
 }
 
-/** 详情页顶部：一句结论 + 两个数字对比 + 进度条 + 达标人数 */
-function heroBlock(r, tiers) {
+/** 详情页顶部：一个大数字 + 一行说明 + 进度 */
+function statBlock(r) {
   const v = progressView(r);
-  let title, a, b, foot;
-  if (r.success) {
-    title = '已成团';
-    a = ['已拼', jpy(r.subtotal)];
-    b = ['运费', r.fee ? `${jpy(r.perItem)}/件` : '包邮'];
-  } else if (r.needFreeYen != null) {
-    title = `还差 ${jpy(r.needFreeYen)} 包邮`;
-    a = ['已拼', jpy(r.subtotal)];
-    b = ['包邮线', jpy(r.threshold)];
-  } else {
+  let cap, num, sub;
+  if (r.success) [cap, num, sub] = ['已成团', jpy(r.subtotal), r.fee ? `每件运费 ${jpy(r.perItem)}` : '包邮'];
+  else if (r.needFreeYen != null) [cap, num, sub] = ['差', jpy(r.needFreeYen), `满 ${jpy(r.threshold)} 包邮`];
+  else {
     const t = r.targetPerItem;
-    title = t > 0 ? `每件运费降到 ${jpy(Math.floor(t))} 以下就成团` : '等待团长处理';
-    a = ['现在每件运费', jpy(r.perItem)];
-    b = ['大家能接受', t > 0 ? `≤ ${jpy(Math.floor(t))}` : '—'];
+    [cap, num, sub] = ['每件运费', jpy(r.perItem), t > 0 ? `降到 ${jpy(Math.floor(t))} 成团` : '需团长处理'];
   }
-  foot = `${r.members.length} 人 · ${r.count} 件 · ${r.okCount}/${r.members.length} 人运费在上限内`;
-  return `
-    <div class="hero-title">${title}</div>
-    <div class="vs">
-      <div><span>${a[0]}</span><b>${a[1]}</b></div>
-      <i aria-hidden="true">→</i>
-      <div><span>${b[0]}</span><b>${b[1]}</b></div>
-    </div>
-    <div class="bar" style="background:rgba(255,255,255,.28)"><i style="width:${v.pct}%;background:#fff"></i></div>
-    <div class="hero-meta"><span>${foot}</span><span>${describeTiers(tiers)}</span></div>`;
+  return `<section class="stat"><small>${cap}</small><b>${num}</b><span>${sub}</span></section>
+    <div class="track"><i style="width:${Math.max(4, v.pct)}%"></i></div>
+    <div class="stat-meta"><span>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)}</span><span>${r.okCount}/${r.members.length} 达标</span></div>`;
 }
+
+const itemRows = (items, showCn, removable) =>
+  items
+    .map(
+      (i) => `<div class="row item">${thumb(i.image)}<a class="row-l" href="${esc(i.url)}" target="_blank" rel="noopener"><b>${showCn ? `${esc(i.cn)} · ` : ''}${esc(i.title || '商品')}</b><small>${jpy(i.price)} × ${i.qty}</small></a>${removable ? `<button class="link-btn" data-rm="${i.id}">撤销</button>` : ''}</div>`,
+    )
+    .join('');
 
 function renderOpen(d) {
   const r = d.result;
   const v = progressView(r);
   const me = d.me;
   $app.innerHTML = `
-  <header class="hero">
-    <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>${esc(d.order.shop_name)}</h1></div>
-    ${heroBlock(r, d.tiers)}
-  </header>
-  <main>
-    <section class="list">
-      <div class="list-head"><span>谁在拼</span><span>分摊运费 / 上限</span></div>
+  ${subHead(d.order.shop_name)}
+  <main class="lite-main">
+    ${statBlock(r)}
+    <div class="rows">
       ${r.members
         .map(
-          (m) => `<div class="li"><div class="mid"><b>${esc(m.member)}${m.member === me ? '（我）' : ''}</b><span>${m.qty} 件 · ${jpy(m.goods)}</span></div>
-          <div class="end"><b>${jpy(m.share)}</b>${m.ok ? `<span class="good">≤ ${jpy(m.cap)} 达标</span>` : `<span class="bad">超出上限 ${jpy(m.cap)}</span>`}</div></div>`,
+          (m) => `<div class="row"><span class="row-l"><b>${esc(m.member)}${m.member === me ? ' · 我' : ''}</b><small>${m.qty}件 · ${jpy(m.goods)}</small></span>
+          <span class="row-r${m.ok ? '' : ' over'}"><small>上限 ${jpy(m.cap)}</small><span>${jpy(m.share)}</span></span></div>`,
         )
         .join('')}
-    </section>
-    ${
-      d.items.length
-        ? `<section class="list"><div class="list-head"><span>${me ? '我的物品' : '全部物品'}</span><span></span></div>
-          ${d.items.map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${me ? '' : `${esc(i.cn)} · `}${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a><button class="mini" data-rm="${i.id}">撤销</button></div>`).join('')}</section>`
-        : `<button class="btn line block" id="login">查看 / 撤销我的物品</button>`
-    }
-    <button class="btn block" id="share">复制链接发到群里</button>
+    </div>
+    ${d.items.length ? `<p class="lite-cap">${me ? '我的物品' : '全部物品'}</p><div class="rows white">${itemRows(d.items, !me, true)}</div>` : `<button class="btn line block" id="login">我的物品</button>`}
+    <button class="btn block" id="share">复制链接</button>
   </main>`;
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
   document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
-    const txt = `【骏和屋拼单】${d.order.shop_name}：${r.members.length} 人 ${r.count} 件，${v.tag}！来拼 → ${location.origin}/#/order/${d.order.id}`;
+    const txt = `【骏和屋拼单】${d.order.shop_name}：${r.members.length}人 ${r.count}件，${v.tag} → ${location.origin}/#/order/${d.order.id}`;
     navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast(txt, 6000));
   };
 }
@@ -366,13 +351,14 @@ function openSheet(html) {
 
 function askLogin() {
   openSheet(`<form class="sheet" id="lgf">
-    <h2>查看我的物品</h2>
+    <h2>我的物品</h2>
     <div class="grid2">
-      <div class="field"><label for="lcn">CN</label><input id="lcn" required value="${esc(store.get('cn') || '')}"></div>
-      <div class="field"><label for="lpin">QQ 号后 4 位</label><input id="lpin" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required></div>
+      <label class="lf"><span>CN</span><input id="lcn" required value="${esc(store.get('cn') || '')}"></label>
+      <label class="lf"><span>QQ 后 4 位</span><input id="lpin" type="password" inputmode="numeric" maxlength="4" pattern="\\d{4}" required></label>
     </div>
     <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn">确认</button></div>
   </form>`);
+  document.getElementById('lcn').focus();
   document.getElementById('lgf').onsubmit = async (e) => {
     e.preventDefault();
     try {
@@ -389,8 +375,8 @@ function askLogin() {
 
 function askRemove(itemId) {
   openSheet(`<div class="sheet">
-    <h2>撤销这件物品？</h2>
-    <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn dark" id="rmok">确认撤销</button></div>
+    <h2>撤销这件物品</h2>
+    <div class="grid2"><button type="button" class="btn line" data-close>取消</button><button class="btn danger" id="rmok">撤销</button></div>
   </div>`);
   document.getElementById('rmok').onclick = async () => {
     try {
@@ -409,21 +395,16 @@ function renderDone(d) {
   const s = d.settle;
   const closed = d.order.status === 'closed';
   const when = d.order.done_at ? new Date(d.order.done_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const mailOk = d.order.mail_status === 'sent';
   $app.innerHTML = `
-  <header class="hero ${closed ? '' : 'ok'}" style="${closed ? 'background:var(--quiet)' : ''}">
-    <div class="titlebar"><a class="back" href="#/" aria-label="返回">${backIcon}</a><h1>${esc(d.order.shop_name)}</h1></div>
-    <div class="big"><b style="font-size:26px">${closed ? '已关闭' : '已成团'}</b></div>
-    <span style="font-size:13px">${closed ? '团长已关闭这个拼单' : `${when} · ${d.order.mail_status === 'sent' ? '下单邮件已发送给代购' : `邮件未发出（${esc((d.order.mail_status || '').replace('failed:', ''))}）`}`}</span>
-  </header>
-  <main>
-    <section class="list">
-      <div class="list-head"><span>运费 ${jpy(r.fee)}${r.fee ? ` · 每件 ${jpy(r.perItem)}` : ''}</span><span>应付</span></div>
-      ${s.rows.map((x) => `<div class="li"><div class="mid"><b>${esc(x.member)}</b><span>${x.qty} 件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</span></div><b style="font-size:17px;font-weight:900">${jpy(x.total)}</b></div>`).join('')}
-      <div class="total"><span style="font-weight:700">总计</span><b>${jpy(s.sum)}</b></div>
-      ${s.rounding ? `<p class="muted" style="margin:0 0 10px">四舍五入差额 ${jpy(s.rounding)}</p>` : ''}
-    </section>
-    ${d.items.length ? `<section class="list"><div class="list-head"><span>${d.me ? '我的物品' : '全部物品'}</span><span></span></div>${d.items.map((i) => `<div class="sub">${thumb(i.image)}<a href="${esc(i.url)}" target="_blank" rel="noopener" class="sub-t">${d.me ? '' : `${esc(i.cn)} · `}${esc(i.title || '商品')}<br><b>${jpy(i.price)} × ${i.qty}</b></a></div>`).join('')}</section>` : ''}
-    ${store.get('adminKey') ? `<div class="grid2"><button class="btn line" id="copy">复制链接清单</button><button class="btn line" id="csv">导出表格</button></div>` : ''}
+  ${subHead(d.order.shop_name)}
+  <main class="lite-main">
+    <section class="stat ${closed ? 'muted' : 'ok'}"><small>${closed ? '已关闭' : `已成团 · ${when}`}</small><b>${jpy(s.sum)}</b><span>${r.fee ? `运费 ${jpy(r.fee)} · 每件 ${jpy(r.perItem)}` : '包邮'}${closed || mailOk ? '' : ' · 邮件未发出'}</span></section>
+    <div class="rows">
+      ${s.rows.map((x) => `<div class="row"><span class="row-l"><b>${esc(x.member)}${x.member === d.me ? ' · 我' : ''}</b><small>${x.qty}件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</small></span><span class="row-r"><span>${jpy(x.total)}</span></span></div>`).join('')}
+    </div>
+    ${d.items.length ? `<p class="lite-cap">${d.me ? '我的物品' : '全部物品'}</p><div class="rows white">${itemRows(d.items, !d.me, false)}</div>` : ''}
+    ${store.get('adminKey') ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="csv">导出</button></div>` : ''}
   </main>`;
   if (!store.get('adminKey')) return;
   document.getElementById('copy').onclick = () => {
@@ -444,8 +425,8 @@ function renderDone(d) {
 async function admin() {
   let key = store.get('adminKey');
   if (!key) {
-    $app.innerHTML = `<header class="hero"><div class="brand">团长后台</div></header>
-      <main><form class="form" id="lg"><div class="field"><label for="k">管理口令</label><input id="k" type="password" required></div><button class="btn block">进入</button></form></main>`;
+    $app.innerHTML = `${subHead('团长后台')}
+      <main class="lite-main"><form class="lite-form" id="lg"><label class="lf"><span>口令</span><input id="k" type="password" required></label><button class="btn block">进入</button></form></main>`;
     document.getElementById('lg').onsubmit = (e) => {
       e.preventDefault();
       store.set('adminKey', document.getElementById('k').value);
@@ -463,8 +444,8 @@ async function admin() {
     return admin();
   }
   $app.innerHTML = `
-  <header class="hero"><div class="hero-top"><div class="brand">团长后台</div><a class="pill" style="color:#fff;text-decoration:none" href="#/">回首页</a></div></header>
-  <main>
+  ${subHead('团长后台')}
+  <main class="lite-main">
     <section class="card"><h3>团设置</h3>
       <div class="field"><label for="be">代购邮箱（成团邮件发到这里）</label><input id="be" type="email" value="${esc(g.buyer_email)}"></div>
       <div class="field"><label for="cc">抄送（可空）</label><input id="cc" type="email" value="${esc(g.cc_email || '')}"></div>
