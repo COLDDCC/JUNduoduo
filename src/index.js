@@ -39,14 +39,15 @@ const makeToken = async (env, memberId) => `${memberId}.${await hmac(env, `membe
 
 /** 当前访问者：团长 / 某个团员 / 路人 */
 async function getViewer(req, env) {
-  if (await isAdmin(req, env)) return { admin: true };
+  // 团长和团员身份可以同时存在（团长自己也会拼单）
+  const viewer = { admin: await isAdmin(req, env) };
   const t = req.headers.get('X-Member-Token') || '';
   const [id, sig] = t.split('.');
   if (id && sig && sig === (await hmac(env, `member:${id}`))) {
     const m = await env.DB.prepare('SELECT id, cn FROM members WHERE id=?').bind(id).first();
-    if (m) return { memberId: m.id, cn: m.cn };
+    if (m) Object.assign(viewer, { memberId: m.id, cn: m.cn });
   }
-  return {};
+  return viewer;
 }
 
 /**
@@ -55,7 +56,7 @@ async function getViewer(req, env) {
  */
 function forViewer(data, viewer) {
   const { items, ...rest } = data;
-  if (viewer.admin) return { ...rest, items: items.map(({ member_id, ...i }) => i), me: null };
+  if (viewer.admin) return { ...rest, items: items.map(({ member_id, ...i }) => i), me: viewer.cn || null, admin: true };
   const mine = items.filter((i) => i.member_id === viewer.memberId).map(({ member_id, ...i }) => i);
   return { ...rest, items: mine, me: viewer.cn || null };
 }
@@ -310,12 +311,15 @@ async function api(req, env, url) {
       .bind(mm[1])
       .first();
     if (!item) return fail('找不到这件商品', 404);
-    if (item.status !== 'open') return fail('已成团，无法撤销', 409);
+    if (item.status !== 'open' && !viewer.admin) return fail('已成团，无法撤销', 409);
     const isOwner = viewer.memberId === item.member_id;
-    if (!isOwner && item.pin_hash !== (await pinHash(env, item.cn, String(b.pin || '')))) return fail('只能撤销自己的物品', 403);
-    await env.DB.prepare("UPDATE items SET removed_at=?, removed_by='self' WHERE id=?").bind(now(), item.id).run();
+    if (!isOwner && !viewer.admin && item.pin_hash !== (await pinHash(env, item.cn, String(b.pin || ''))))
+      return fail('只能撤销自己的物品', 403);
+    await env.DB.prepare('UPDATE items SET removed_at=?, removed_by=? WHERE id=?')
+      .bind(now(), isOwner ? 'self' : viewer.admin ? 'admin' : 'self', item.id)
+      .run();
     const o = await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(item.order_id).first();
-    return json(forViewer(await loadOrder(env, o, pref), { memberId: item.member_id, cn: item.cn }));
+    return json(forViewer(await loadOrder(env, o, pref), viewer.admin ? viewer : { memberId: item.member_id, cn: item.cn }));
   }
 
   // ---------- 团长后台 ----------

@@ -331,7 +331,8 @@ function renderOpen(d) {
         )
         .join('')}
     </div>
-    ${d.items.length ? `<p class="lite-cap">${me ? '我的物品' : '全部物品'}</p><div class="rows white">${itemRows(d.items, !me, true)}</div>` : `<button class="btn line block" id="login">我的物品</button>`}
+    ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, true)}</div>` : ''}
+    ${!me ? `<button class="btn line block" id="login">我的物品</button>` : ''}
     <button class="btn block" id="share">复制链接</button>
   </main>`;
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
@@ -403,7 +404,7 @@ function renderDone(d) {
     <div class="rows">
       ${s.rows.map((x) => `<div class="row"><span class="row-l"><b>${esc(x.member)}${x.member === d.me ? ' · 我' : ''}</b><small>${x.qty}件 ${jpy(x.goods)} + 运费 ${jpy(x.shipping)}</small></span><span class="row-r"><span>${jpy(x.total)}</span></span></div>`).join('')}
     </div>
-    ${d.items.length ? `<p class="lite-cap">${d.me ? '我的物品' : '全部物品'}</p><div class="rows white">${itemRows(d.items, !d.me, false)}</div>` : ''}
+    ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, false)}</div>` : ''}
     ${store.get('adminKey') ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="csv">导出</button></div>` : ''}
   </main>`;
   if (!store.get('adminKey')) return;

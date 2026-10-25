@@ -130,6 +130,14 @@ test('隐私：只有本人看得到自己的物品', async () => {
   r = await call(`/api/items/${itemA}/remove`, 'POST', {}, { 'X-Member-Token': a.data.token });
   assert.equal(r.status, 200);
 
+  // 团长同时也是团员：两个身份都在时，能看到全部，也能撤销自己的
+  const both = { 'X-Member-Token': b.data.token, 'X-Admin-Key': 'admin' };
+  const asBoth = await call(`/api/orders/${id}`, 'GET', null, both);
+  assert.equal(asBoth.data.me, '乙');
+  assert.equal(asBoth.data.admin, true);
+  r = await call(`/api/items/${b.data.items[0].id}/remove`, 'POST', {}, both);
+  assert.equal(r.status, 200, '团长身份下也能撤销自己的物品');
+
   const login = await call('/api/login', 'POST', { cn: '乙', pin: '2222' });
   assert.equal(login.status, 200);
   assert.equal((await call('/api/login', 'POST', { cn: '乙', pin: '9999' })).status, 403);
