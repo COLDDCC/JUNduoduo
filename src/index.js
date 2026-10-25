@@ -10,7 +10,9 @@ const GROUP = 'default';
 const SHOP_NAME_OVERRIDES = { '400564': '駿河屋　四日市店' };
 function displayShopName(shopId, ...names) {
   if (SHOP_NAME_OVERRIDES[shopId]) return SHOP_NAME_OVERRIDES[shopId];
-  return names.find((name) => name && name.trim() && !new RegExp('^(?:店铺\\s*)?' + shopId + '(?:\\s*拼团)?
+  const good = names.find((name) => name && name.trim() && name.trim() !== shopId && name.trim() !== '店铺 ' + shopId && name.trim() !== shopId + '拼团');
+  return good || ('店铺 ' + shopId);
+}
 const SHOP_CACHE_MS = 7 * 24 * 3600 * 1000;
 
 const json = (data, status = 200) =>
