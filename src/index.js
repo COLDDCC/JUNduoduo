@@ -7,7 +7,7 @@ import SCHEMA from './schema.js';
 import { buildXlsx } from './xlsx.js';
 
 const GROUP = 'default';
-const SHOP_NAME_OVERRIDES = { '400564': '駿河屋　四日市店' };
+const SHOP_NAME_OVERRIDES = { '400564': '駿河屋　四日市店', '200985': 'ブックマーケット函館美原店' };
 function displayShopName(shopId, ...names) {
   if (SHOP_NAME_OVERRIDES[shopId]) return SHOP_NAME_OVERRIDES[shopId];
   const good = names.find((name) => name && name.trim() && name.trim() !== shopId && name.trim() !== '店铺 ' + shopId && name.trim() !== shopId + '拼团');
