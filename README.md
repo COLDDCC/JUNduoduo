@@ -62,7 +62,7 @@ Cloudflare 后台 → Workers & Pages → Create → Workers → Import a reposi
    - `PIN_SALT`：任意随机字符串，设好后不要改
    - `RESEND_API_KEY`：可选，不填则成团时不发邮件
 
-网址为 `https://junduoduo.<你的子域名>.workers.dev`，团长后台为网址后加 `/#/admin`。
+网址为 https://junduoduo.toolfavor.com（也可用 workers.dev 地址），团长后台为网址后加 `/#/admin`。
 
 ## 使用
 

@@ -20,7 +20,7 @@ BUYER_EMAIL = "lengche2222@gmail.com"
 # 发件地址：域名需要先在 Resend 后台验证，例如 "骏和屋拼单 <pin@你的域名>"
 MAIL_FROM = "onboarding@resend.dev"
 # 网站地址，邮件里的“在拼单页查看”链接用；留空则用访问地址
-SITE_URL = ""
+SITE_URL = "https://junduoduo.toolfavor.com"
 
 # 以下用 `npx wrangler secret put 名字` 设置，不要写进这个文件：
 #   ADMIN_KEY       团长后台口令
