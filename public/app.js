@@ -184,7 +184,7 @@ function shopPill(d, lead, done) {
   else [unit, num] = ['每件', jpy(r.perItem)];
   const w = done ? 100 : Math.round(74 + 0.26 * v.pct);
   return `<a class="pill${lead ? ' lead' : ''}${done ? ' done' : ''}${d.order.status === 'ordered' ? ' ordered' : ''}" href="#/order/${d.order.id}" style="width:${w}%">
-    <span class="pill-l"><b>${esc(d.order.shop_name)}</b><small>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)}${iAmIn ? ' · 我' : ''}</small></span>
+    <span class="pill-l"><b>${esc(readableShopName(d.order))}</b><small>${r.members.length}人 · ${r.count}件 · ${jpy(r.subtotal)}${iAmIn ? ' · 我' : ''}</small></span>
     <span class="pill-r">${unit ? `<small>${unit}</small>` : ''}<span>${num}</span></span></a>`;
 }
 
@@ -192,12 +192,17 @@ function whoLine(r) {
   return r.members.map((m) => `${esc(m.member)} ${m.qty}件 ${jpy(m.goods)}`).join('、');
 }
 
+const SHOP_DISPLAY_NAMES = { '400564': '駿河屋　四日市店', '200985': 'ブックマーケット函館美原店' };
+function readableShopName(order) {
+  return SHOP_DISPLAY_NAMES[String(order.shop_id)] || (order.shop_name && !/^店铺\s*\d+$/.test(order.shop_name) ? order.shop_name : '店铺 ' + order.shop_id);
+}
+
 function shopCard(d) {
   const r = d.result;
   const v = progressView(r);
   const iAmIn = d.me && r.members.some((m) => m.member === d.me);
   return `<a class="card link" href="#/order/${d.order.id}">
-    <div class="card-head"><h3>${esc(d.order.shop_name)}${iAmIn ? ' <span class="tag mine">我在拼</span>' : ''}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
+    <div class="card-head"><h3>${esc(readableShopName(d.order))}${iAmIn ? ' <span class="tag mine">我在拼</span>' : ''}</h3><span class="tag ${v.ok ? 'ok' : ''}">${v.tag}</span></div>
     <div class="bar sm"><i style="width:${v.pct}%"></i></div>
     <div class="who">${whoLine(r)}</div>
     <div class="meta"><span>合计 ${jpy(r.subtotal)}</span><span class="muted">${v.right}</span></div></a>`;
@@ -347,7 +352,7 @@ function renderOpen(d) {
   const v = progressView(r);
   const me = d.me;
   $app.innerHTML = `
-  ${subHead(d.order.shop_name)}
+  ${subHead(readableShopName(d.order))}
   <main class="lite-main">
     <p class="lite-cap">店铺 ID：${esc(d.order.shop_id)}</p>
     ${statBlock(r)}
@@ -369,7 +374,7 @@ function renderOpen(d) {
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
   document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
-    const txt = `【骏和屋拼单】${d.order.shop_name}：${r.members.length}人 ${r.count}件，${v.tag} → ${location.origin}/#/order/${d.order.id}`;
+    const txt = `【骏和屋拼单】${readableShopName(d.order)}：${r.members.length}人 ${r.count}件，${v.tag} → ${location.origin}/#/order/${d.order.id}`;
     navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast(txt, 6000));
   };
 }
@@ -449,7 +454,7 @@ function renderDone(d) {
   const when = d.order.done_at ? new Date(d.order.done_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
   const mailOk = d.order.mail_status === 'sent';
   $app.innerHTML = `
-  ${subHead(d.order.shop_name)}
+  ${subHead(readableShopName(d.order))}
   <main class="lite-main">
     <p class="lite-cap">店铺 ID：${esc(d.order.shop_id)}</p>
     <section class="stat ${closed ? 'muted' : 'ok'}"><small>${closed ? '已关闭' : ordered ? `已下单 · 单号 ${esc(d.order.order_no)}` : `已成团 · ${when}`}</small><b>${jpy(s.sum)}</b><span>${r.fee ? `运费 ${jpy(r.fee)} · 每件 ${jpy(r.perItem)}` : '包邮'}${closed || mailOk ? '' : ' · 邮件未发出'}</span></section>
@@ -573,7 +578,7 @@ function adminOrder(d) {
   const fee0 = d.tiers?.[0]?.fee ?? '';
   const free = freeThreshold(d.tiers) ?? '';
   return `<section class="card">
-    <div class="card-head"><div><h3>${esc(o.shop_name)}</h3><span class="muted">店铺 ID ${esc(o.shop_id)} · ${{ open: '拼单中', done: '已成团', ordered: `已下单 ${esc(o.order_no || '')}`, closed: '已关闭' }[o.status] || o.status} · 运费来源：${{ auto: '自动抓取', manual: '手动', order: '本团单独', none: '未读到' }[d.tiersSource] || d.tiersSource}</span></div>
+    <div class="card-head"><div><h3>${esc(readableShopName(o))}</h3><span class="muted">店铺 ID ${esc(o.shop_id)} · ${{ open: '拼单中', done: '已成团', ordered: `已下单 ${esc(o.order_no || '')}`, closed: '已关闭' }[o.status] || o.status} · 运费来源：${{ auto: '自动抓取', manual: '手动', order: '本团单独', none: '未读到' }[d.tiersSource] || d.tiersSource}</span></div>
       <span class="tag ${r.success ? 'ok' : ''}">${r.count} 件 · ${jpy(r.subtotal)}</span></div>
     <div class="admin-row"><span class="muted">运费</span><input id="fee-${o.id}" type="number" value="${fee0}"><span class="muted">满</span><input id="free-${o.id}" type="number" placeholder="—" value="${free}"><span class="muted">包邮</span>
       <button class="mini" data-act="tiers" data-id="${o.id}" data-shop="${esc(o.shop_id)}">保存为该店运费</button>
