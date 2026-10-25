@@ -87,13 +87,14 @@ export function parseOtherPage(html, productId) {
       const nm = chunk.match(new RegExp(`/shop/${h.tenpo}"[^>]*>([\\s\\S]*?)</a>`));
       shopName = nm ? decode(nm[1]) || `店铺 ${h.tenpo}` : `店铺 ${h.tenpo}`;
     }
-    // 价格：取片段里离链接最近的“xxx円”（片段后半部分优先）
-    const after = html.slice(h.idx, end);
+    // 价格：在“上一条出品链接 → 这条链接”之间找（骏和屋把价格放在链接前面），
+    // 去掉划线原价、定价、买取价、包邮门槛这类数字后取最小值（限时降价时取现价）
     const before = html.slice(start, h.idx);
-    const price = yen(after) ?? lastYen(before);
-    // 状态：优先取这条链接自身的文字（如“中古帯付き”），否则在片段后半部分找
+    const after = html.slice(h.idx, end);
+    const price = pickPrice(before) ?? pickPrice(after.slice(0, 1500));
+    // 状态：优先取这条链接自身的文字（如“中古帯付き”），否则在片段里找
     const own = (after.match(/^[^>]*>([^<]{0,40})</) || [])[1] || '';
-    const cond = (own.match(/(中古.*|新品.*)/) || after.match(/(中古[^<|｜]{0,30}|新品)/) || [])[1] || null;
+    const cond = (own.match(/(中古.*|新品.*)/) || before.slice(-1500).match(/(中古[^<|｜]{0,30}|新品)/) || [])[1] || null;
 
     seen.set(key, {
       shopId,
@@ -106,6 +107,24 @@ export function parseOtherPage(html, productId) {
   }
   const listings = [...seen.values()].sort((a, b) => (a.price ?? 9e9) - (b.price ?? 9e9));
   return { productId, title, image: parseImage(html, productId), listings };
+}
+
+/** 从一段 HTML 里挑出售价 */
+export function pickPrice(fragment) {
+  const cleaned = String(fragment)
+    .replace(/<(s|del|strike)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+class="[^"]*(?:teika|line-through|kaitori|price-teika|text-decoration)[^"]*"[^>]*>[\s\S]*?<\/[a-z]+>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ');
+  const vals = [];
+  for (const m of cleaned.matchAll(/([\d,]{2,})\s*円/g)) {
+    const ctxBefore = cleaned.slice(Math.max(0, m.index - 12), m.index);
+    const ctxAfter = cleaned.slice(m.index + m[0].length, m.index + m[0].length + 6);
+    if (/定価|買取|参考|送料/.test(ctxBefore)) continue;
+    if (/^\s*(以上|未満|から|〜|~)/.test(ctxAfter)) continue;
+    const v = Number(m[1].replace(/,/g, ''));
+    if (v > 0) vals.push(v);
+  }
+  return vals.length ? Math.min(...vals) : null;
 }
 
 function lastYen(s) {

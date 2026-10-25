@@ -206,6 +206,18 @@ async function api(req, env, url) {
     return json({ productId: data.productId, title: data.title, image: data.image, hint: data.hint, prefecture: pref, listings: shops });
   }
 
+  // 临时：查看骏和屋出品列表的 HTML 结构（只保留标签名、class 和文字），核对解析用，核对完删除
+  if (p === '/api/probe' && m === 'GET') {
+    const id = (url.searchParams.get('id') || '').replace(/\D/g, '');
+    const html = await fetchHtml(`https://www.suruga-ya.jp/product/other/${id}`);
+    const at = html.indexOf(`/product/detail/${id}?`);
+    const seg = html.slice(Math.max(0, at - 2500), at + 2500)
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+      .replace(/<([a-z0-9]+)\b[^>]*?(class="[^"]*")?[^>]*>/gi, (_, t, c) => `<${t}${c ? ' ' + c : ''}>`)
+      .replace(/\s+/g, ' ');
+    return new Response(seg, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  }
+
   // 首页：正在拼 + 最近成团
   if (p === '/api/orders' && m === 'GET') {
     const { results } = await env.DB.prepare(
