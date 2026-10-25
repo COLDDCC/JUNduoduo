@@ -5,6 +5,7 @@ import {
   parseProductId,
   parseListingHint,
   parseOtherPage,
+  parseDetailSale,
   parseSingleShopDetail,
   parseSinglePage,
   parseDeliveryPage,
@@ -118,4 +119,10 @@ test('唯一店铺详情页没有出品链接时恢复商品价格与店铺', ()
   assert.equal(r.price, 650);
   assert.equal(r.url, 'https://www.suruga-ya.jp/product/detail/ZHORE185731?tenpo_cd=200985');
   assert.equal(parseSingleShopDetail(html + '申し訳ございません。品切れ中です。', 'ZHORE185731'), null);
+});
+
+test('商品详情 HTML 标签隔开价格和库存时仍识别 650 日元', () => {
+  const html = '<div>中古 <strong>650円</strong> (税込) ' + '<span class="space"></span>'.repeat(1200) + '<span>在庫数：1</span></div>';
+  assert.deepEqual(parseDetailSale(html), { price: 650, condition: '中古' });
+  assert.deepEqual(parseDetailSale('<p>中古 650円 (税込) 在庫数：0</p>'), { price: null, condition: null });
 });
