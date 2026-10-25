@@ -4,6 +4,7 @@ import { scrapeProduct, scrapeShipping, fetchHtml, parseProductId, HONTEN_ID } f
 import { evaluate, settle } from './calc.js';
 import { buildMail, buildReadyMail, sendMail } from './mail.js';
 import SCHEMA from './schema.js';
+import { buildXlsx } from './xlsx.js';
 
 const GROUP = 'default';
 const SHOP_CACHE_MS = 7 * 24 * 3600 * 1000;
@@ -185,6 +186,58 @@ async function finalize(env, group, data, siteUrl) {
   return status;
 }
 
+/** 下载商品图，失败返回 null（导出表格时用，同一张图只下一次） */
+async function fetchImage(url) {
+  if (!/^https?:\/\//.test(url || '')) return null;
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.suruga-ya.jp/' },
+      cf: { cacheTtl: 86400 },
+    });
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    return buf.length > 50 && buf.length < 3e6 ? buf : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 一个拼单导出成 Excel：第 1 页给代购下单（一件一行），第 2 页是分账 */
+async function exportOrderXlsx(data) {
+  const { order, items, result } = data;
+  const s = settle(result);
+  // Worker 免费版单次请求最多 50 个子请求，图片去重后最多取 40 张
+  const urls = [...new Set(items.map((i) => i.image).filter(Boolean))].slice(0, 40);
+  const pics = Object.fromEntries(await Promise.all(urls.map(async (u) => [u, await fetchImage(u)])));
+  const rows = [['名称', '图片', '商品链接', '平时价格', '实际价格', 'cn']];
+  for (const i of items) {
+    for (let k = 0; k < (i.qty || 1); k++) {
+      const pic = pics[i.image];
+      rows.push([
+        i.title || '',
+        pic ? { image: pic, fallback: i.image } : i.image || '',
+        { v: i.url, link: i.url },
+        i.price,
+        i.price,
+        i.cn,
+      ]);
+    }
+  }
+  const status = { open: '拼单中', done: '已成团', ordered: '已下单', closed: '已关闭' }[order.status] || order.status;
+  const bill = [
+    ['cn', '件数', '商品金额', '运费分摊', '应付'],
+    ...s.rows.map((x) => [x.member, x.qty, x.goods, x.shipping, x.total]),
+    ['合计', result.count, result.subtotal, result.fee || 0, s.sum],
+    [],
+    ['店铺', order.shop_name || order.shop_id],
+    ['状态', status + (order.order_no ? ` · 单号 ${order.order_no}` : '')],
+  ];
+  return buildXlsx([
+    { name: '商品', cols: [40, 13, 36, 10, 10, 12], rowHeight: 66, rows },
+    { name: '分账', cols: [14, 8, 12, 12, 12], rows: bill },
+  ]);
+}
+
 async function isAdmin(req, env) {
   const key = req.headers.get('X-Admin-Key');
   return !!env.ADMIN_KEY && key === env.ADMIN_KEY;
@@ -352,6 +405,34 @@ async function api(req, env, url) {
     if (!(await isAdmin(req, env))) return fail('管理口令不对', 401);
 
     if (p === '/api/admin/group' && m === 'GET') return json({ ...group, admin_hash: undefined });
+
+    // 后台列表：所有拼单（含已成团、已下单、已关闭），最近 100 个，团长视角带全部物品
+    if (p === '/api/admin/orders' && m === 'GET') {
+      const { results } = await env.DB.prepare(
+        `SELECT * FROM orders WHERE group_id=? ORDER BY status='open' DESC, COALESCE(done_at, created_at) DESC LIMIT 100`,
+      )
+        .bind(GROUP)
+        .all();
+      const list = await Promise.all(results.map((o) => loadOrder(env, o, pref)));
+      return json({ prefecture: pref, orders: list.filter((o) => o.items.length || o.order.status !== 'open').map(out) });
+    }
+
+    // 导出 Excel：名称 / 图片 / 商品链接 / 平时价格 / 实际价格 / cn
+    if ((mm = p.match(/^\/api\/admin\/orders\/([\w-]+)\/export$/)) && m === 'GET') {
+      const o = await env.DB.prepare('SELECT * FROM orders WHERE id=? AND group_id=?').bind(mm[1], GROUP).first();
+      if (!o) return fail('找不到这个拼单', 404);
+      const data = await loadOrder(env, o, pref);
+      const file = await exportOrderXlsx(data);
+      const day = new Date(o.done_at || now()).toISOString().slice(0, 10);
+      const name = `${data.order.shop_name || o.shop_id}-${day}.xlsx`;
+      return new Response(file, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="order.xlsx"; filename*=UTF-8''${encodeURIComponent(name)}`,
+          'Cache-Control': 'no-store',
+        },
+      });
+    }
     if (p === '/api/admin/group' && m === 'PUT') {
       const b = await body(req);
       await env.DB.prepare('UPDATE groups SET buyer_email=?, cc_email=?, prefecture=? WHERE id=?')

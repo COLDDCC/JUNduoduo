@@ -49,6 +49,28 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/** 团长导出 Excel：带口令请求，拿到文件后触发下载 */
+async function downloadXlsx(orderId, btn) {
+  if (btn) { btn.disabled = true; btn.dataset.t = btn.textContent; btn.textContent = '生成中…'; }
+  try {
+    const res = await fetch(`/api/admin/orders/${orderId}/export`, { headers: { 'X-Admin-Key': store.get('adminKey') || '' } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await res.blob());
+    a.download = m ? decodeURIComponent(m[1]) : '拼单.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (e) {
+    toast(`导出失败：${e.message}`, 4000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.t; }
+  }
+}
+
 function describeTiers(tiers) {
   if (!tiers || !tiers.length) return '运费未知，等团长设置';
   const T = freeThreshold(tiers);
@@ -335,10 +357,11 @@ function renderOpen(d) {
     </div>
     ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, true)}</div>` : ''}
     ${!me && !d.admin ? `<button class="btn line block" id="login">我的物品</button>` : ''}
-    ${d.admin ? `<button class="btn block${r.success ? '' : ' line'}" id="confirm">成团并发邮件</button>` : ''}
+    ${d.admin ? `<button class="btn block${r.success ? '' : ' line'}" id="confirm">成团并发邮件</button><button class="btn line block" id="xlsx">导出 Excel</button>` : ''}
     <button class="btn block${d.admin ? ' line' : ''}" id="share">复制链接</button>
   </main>`;
   document.getElementById('confirm')?.addEventListener('click', () => askConfirm(d));
+  document.getElementById('xlsx')?.addEventListener('click', (e) => downloadXlsx(d.order.id, e.currentTarget));
   $app.querySelectorAll('[data-rm]').forEach((b) => (b.onclick = () => askRemove(b.dataset.rm)));
   document.getElementById('login')?.addEventListener('click', askLogin);
   document.getElementById('share').onclick = () => {
@@ -430,7 +453,7 @@ function renderDone(d) {
     </div>
     ${d.items.length ? `<p class="lite-cap">${d.admin ? '全部物品' : '我的物品'}</p><div class="rows white">${itemRows(d.items, d.admin, false)}</div>` : ''}
     ${d.admin && !closed ? `<form class="lite-form" id="ono"><label class="lf"><span>单号</span><input id="onoin" required maxlength="64" value="${esc(d.order.order_no || '')}"></label><button class="btn block">${ordered ? '更新单号' : '已下单'}</button></form>` : ''}
-    ${d.admin ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="csv">导出</button></div>` : ''}
+    ${d.admin ? `<div class="grid2"><button class="btn line" id="copy">复制清单</button><button class="btn line" id="xlsx">导出 Excel</button></div>` : ''}
   </main>`;
   document.getElementById('ono')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -447,14 +470,7 @@ function renderDone(d) {
     const txt = d.items.map((i) => `${i.cn}\t${i.url}\t${jpy(i.price)} × ${i.qty}`).join('\n');
     navigator.clipboard?.writeText(txt).then(() => toast('已复制'), () => toast('复制失败'));
   };
-  document.getElementById('csv').onclick = () => {
-    const rows = [['CN', '商品', '链接', '单价', '数量'], ...d.items.map((i) => [i.cn, i.title || '', i.url, i.price, i.qty]), [], ['CN', '件数', '商品金额', '运费分摊', '应付'], ...s.rows.map((x) => [x.member, x.qty, x.goods, x.shipping, x.total])];
-    const csv = '﻿' + rows.map((row) => row.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `${d.order.shop_name}-分账.csv`;
-    a.click();
-  };
+  document.getElementById('xlsx').onclick = (e) => downloadXlsx(d.order.id, e.currentTarget);
 }
 
 // ---------- 团长后台 ----------
@@ -473,7 +489,7 @@ async function admin() {
   const A = (path, opts = {}) => api(path, { ...opts, headers: { 'X-Admin-Key': key } });
   let g, list;
   try {
-    [g, list] = await Promise.all([A('/api/admin/group'), api('/api/orders')]);
+    [g, list] = await Promise.all([A('/api/admin/group'), A('/api/admin/orders')]);
   } catch (e) {
     store.del('adminKey');
     toast(e.message);
@@ -528,6 +544,8 @@ async function admin() {
         await A(`/api/admin/shops/${shop}`, { method: 'PUT', body: { tiers } });
       } else if (act === 'auto') {
         await A(`/api/admin/shops/${shop}`, { method: 'PUT', body: { tiers: null } });
+      } else if (act === 'xlsx') {
+        return downloadXlsx(id, b);
       } else if (act === 'rmitem') {
         if (!confirm('移除这件商品？')) return;
         await A(`/api/admin/items/${id}`, { method: 'DELETE' });
@@ -555,9 +573,10 @@ function adminOrder(d) {
     <div class="admin-row"><span class="muted">运费</span><input id="fee-${o.id}" type="number" value="${fee0}"><span class="muted">满</span><input id="free-${o.id}" type="number" placeholder="—" value="${free}"><span class="muted">包邮</span>
       <button class="mini" data-act="tiers" data-id="${o.id}" data-shop="${esc(o.shop_id)}">保存为该店运费</button>
       <button class="mini" data-act="auto" data-id="${o.id}" data-shop="${esc(o.shop_id)}">恢复自动</button></div>
-    ${d.items.map((i) => `<div class="admin-row"><span style="flex:1;font-size:13px">${esc(i.cn)} · ${jpy(i.price)} × ${i.qty} · <a href="${esc(i.url)}" target="_blank" rel="noopener">链接</a></span><button class="mini" data-act="rmitem" data-id="${i.id}">移除</button></div>`).join('')}
+    ${d.items.length ? `<div class="rows white">${d.items.map((i) => `<div class="row item">${thumb(i.image)}<a class="row-l" href="${esc(i.url)}" target="_blank" rel="noopener"><b>${esc(i.cn)} · ${esc(i.title || '商品')}</b><small>${jpy(i.price)} × ${i.qty}</small></a><button class="link-btn" data-act="rmitem" data-id="${i.id}">移除</button></div>`).join('')}</div>` : '<p class="muted">没有物品</p>'}
     <div class="admin-row">
       ${o.status === 'open' ? `<button class="mini" data-act="done" data-id="${o.id}">手动成团并发邮件</button><button class="mini" data-act="close" data-id="${o.id}">关团</button>` : `<button class="mini" data-act="reopen" data-id="${o.id}">重新打开</button><button class="mini" data-act="resend" data-id="${o.id}">重发邮件</button>`}
+      ${d.items.length ? `<button class="mini" data-act="xlsx" data-id="${o.id}">导出 Excel</button>` : ''}
       ${o.mail_status ? `<span class="muted">邮件：${esc(o.mail_status)}</span>` : ''}
     </div></section>`;
 }

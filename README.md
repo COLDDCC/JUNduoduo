@@ -48,6 +48,7 @@ public/        手机网页（index.html、app.js、style.css、calc.js）
 src/index.js   接口：/api/scrape /api/orders /api/join /api/items/:id/remove /api/admin/*
 src/scrape.js  骏和屋页面解析
 src/mail.js    成团邮件
+src/xlsx.js    导出 Excel（无依赖）
 schema.sql     数据库结构
 test/          测试（node --test，无需安装依赖）
 ```
@@ -67,7 +68,8 @@ Cloudflare 后台 → Workers & Pages → Create → Workers → Import a reposi
 ## 使用
 
 - 团员：打开网址，贴链接 → 选店 → 填 CN、QQ 后 4 位、能接受的运费上限 → 加入。
-- 团长：访问 `网址/#/admin`，输入 `ADMIN_KEY`。可改代购邮箱、店铺运费、手动成团或关团、移除商品、重发邮件。
+- 团长：访问 `网址/#/admin`，输入 `ADMIN_KEY`。可改代购邮箱、店铺运费、手动成团或关团、移除商品、重发邮件。后台列出全部拼单（含已成团、已下单），每件商品显示 CN、图片和名称。
+- 导出 Excel：后台每个拼单、以及团长打开的拼单页都有“导出 Excel”。第 1 页“商品”表头为 `名称 / 图片 / 商品链接 / 平时价格 / 实际价格 / cn`，一件一行（买 2 件就 2 行），商品图直接嵌在单元格里；第 2 页“分账”是每人件数、商品金额、运费分摊和应付。平时价格和实际价格都填加入时的售价。
 
 ## 本地开发
 

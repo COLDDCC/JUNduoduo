@@ -18,11 +18,14 @@ function makeD1() {
   return { prepare: (sql) => stmt(sql), batch: async (list) => Promise.all(list.map((s) => s.run())) };
 }
 
+// 1×1 PNG，模拟商品图
+const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
 const sent = [];
 globalThis.fetch = async (url, opts = {}) => {
   const u = String(url);
   if (u.includes('/product/other/')) return new Response(fx('other.html'));
   if (u.includes('/shop/delivery/')) return new Response(fx('delivery-fixed.html'));
+  if (u.includes('/database/')) return new Response(PNG);
   if (u.includes('api.resend.com')) {
     sent.push(JSON.parse(opts.body));
     return new Response('{"id":"x"}');
@@ -179,4 +182,29 @@ test('团长后台：口令、改运费', async () => {
   assert.equal(r.status, 404);
   const s = await call(`/api/scrape?url=${encodeURIComponent(LINK)}`);
   assert.deepEqual(s.data.listings[0].tiers, [{ min: 0, fee: 600 }, { min: 3000, fee: 0 }]);
+});
+
+test('团长导出 Excel：一件一行，表头固定，带图片', async () => {
+  const list = await call('/api/admin/orders', 'GET', null, { 'X-Admin-Key': 'admin' });
+  assert.equal(list.status, 200);
+  const done = list.data.orders.find((o) => o.order.status === 'ordered');
+  assert.ok(done, '后台能看到已下单的团');
+  assert.ok(done.items.every((i) => i.cn && i.title), '后台能看到谁买了什么');
+  assert.equal((await call('/api/admin/orders')).status, 401);
+
+  const res = await worker.fetch(new Request(`https://pin.example.com/api/admin/orders/${done.order.id}/export`, { headers: { 'X-Admin-Key': 'admin' } }), env);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('Content-Type'), /spreadsheetml/);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  assert.equal(buf[0], 0x50);
+  assert.equal(buf[1], 0x4b);
+  const text = new TextDecoder().decode(buf);
+  for (const h of ['名称', '图片', '商品链接', '平时价格', '实际价格', 'cn']) assert.ok(text.includes(`<t xml:space="preserve">${h}</t>`), h);
+  assert.ok(text.includes('xl/media/image1.png'), '嵌入了商品图');
+  const sheet = text.slice(text.indexOf('<worksheet'), text.indexOf('</worksheet>'));
+  const qty = done.items.reduce((a, i) => a + i.qty, 0);
+  assert.equal((sheet.match(/<row /g) || []).length, qty + 1, '一件一行');
+
+  const bad = await worker.fetch(new Request(`https://pin.example.com/api/admin/orders/${done.order.id}/export`), env);
+  assert.equal(bad.status, 401);
 });
